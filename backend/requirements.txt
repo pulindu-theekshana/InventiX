@@ -1,0 +1,32 @@
+# InventiX backend dependencies
+# Versions pinned so every team member and the marker build the same thing.
+# Spec section 3.
+
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic==2.13.5
+pydantic-settings==2.15.0
+python-multipart==0.0.32     # multipart upload of sales report files, spec 6.6
+
+supabase==2.31.0             # the only way this backend reaches the database
+httpx==0.28.1                # outbound calls to WhatsApp and email
+PyJWT[crypto]==2.13.0        # verifying the Supabase access token, spec 15.2
+
+apscheduler==3.11.3          # scheduled background jobs, spec 14
+pandas==3.0.5                # CSV and Excel parsing for sales uploads
+openpyxl==3.1.5              # .xlsx support for pandas
+
+# Push notifications. Not imported unless FIREBASE_CREDENTIALS_PATH is set, so the
+# backend runs without it during development.
+firebase-admin==7.5.0
+
+# Machine learning is phase 10 (spec 7.2) and needs sales history that does not
+# exist yet. Deliberately not installed: app/ml/ holds the interfaces and returns
+# "not enough data" until there is data. Uncomment when phase 10 starts.
+# scikit-learn==1.8.0
+# numpy==2.3.4
+
+# Development
+pytest==9.1.1
+pytest-asyncio==1.4.0
+ruff==0.16.5

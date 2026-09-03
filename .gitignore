@@ -1,0 +1,37 @@
+# Root ignores. backend/ and frontend/ have their own for their own contents;
+# this file covers the project root and anything not caught by those.
+
+# Duplicate of the tree that is already in this repo
+*.zip
+
+# Secrets. The subfolder .gitignore files cover backend/.env and frontend/.env,
+# this catches any stray one at the root or in a new folder.
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output, wherever they appear
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+dist/
+build/
+
+# Expo
+.expo/
+expo-env.d.ts
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and local scratch
+*.log
