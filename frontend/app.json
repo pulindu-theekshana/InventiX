@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "scheme": "inventix",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "lk.inventix.app"
