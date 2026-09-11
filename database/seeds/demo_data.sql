@@ -12,7 +12,7 @@
 -- through the Supabase Auth API or the dashboard, not by SQL.
 --
 --   1. Supabase dashboard, Authentication, Add user:
---        demo.shop@inventix.lk      becomes the customer
+--        wasantha.kade@inventix.lk      becomes the customer
 --        demo.supplier@inventix.lk  becomes the supplier
 --   2. Copy each new user UUID.
 --   3. Replace the two values below.
@@ -39,7 +39,7 @@ begin
   insert into profiles (id, role, business_name, contact_person, phone,
                         whatsapp_number, email, address, city)
   values (v_customer, 'customer', 'Wasantha Kade', 'Mahinda', '077 123 4567',
-          '077 123 4567', 'demo.shop@inventix.lk', 'No 44, Horowpathana Road', 'Galle')
+          '077 123 4567', 'wasantha.kade@inventix.lk', 'No 44, Horowpathana Road', 'Galle')
   on conflict (id) do nothing;
 
   insert into profiles (id, role, business_name, contact_person, phone,
