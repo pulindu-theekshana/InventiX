@@ -18,6 +18,28 @@ plus the traps already discovered, so they are not rediscovered one 500 at a tim
 - **One rule, one place.** `StockItemView.status` is derived in `domain/stock.py` only, so the pie
   chart and the list can never disagree. Do not recompute derived values in the app.
 
+## Database — already built, do not rebuild
+
+The whole team shares **one** Supabase project. Everyone's app and backend point at it, so a change
+made once is a change for everybody. As of 12 September 2026 it already holds:
+
+- migrations `0001`–`0020`, both files in `functions/`, all of `policies/`
+- seeds `product_catalog` (36 products), `seasonal_events`, `app_config`
+- `demo_data`: two auth users (`wasantha.kade@inventix.lk` shop, `demo.supplier@inventix.lk`
+  supplier), 4 stock items, 4 supplier listings, 2 orders, 1 rating
+
+**Do not re-run any of it** unless a specific instruction says so. What happens if you do:
+
+| File | Re-running it |
+|---|---|
+| `migrations/*` | Errors with "already exists". Harmless, but it is not a fix — the schema is current. |
+| `functions/*`, `policies/*` | `create or replace` is safe; a `create policy` errors if it exists. Re-run these when a fix changes them. |
+| `seeds/product_catalog`, `seasonal_events`, `app_config` | Safe, all guarded with `on conflict`. |
+| **`seeds/demo_data.sql`** | **Not safe.** Its `orders`, `order_items` and `supplier_ratings` inserts have no conflict guard, so a second run creates duplicate orders and a duplicate rating — which quietly skews the supplier's score and measured delivery time. Only ever run against an empty database. |
+
+New test accounts are made through the app's Register screen, never by SQL. The UUIDs at the top of
+`demo_data.sql` are placeholders that only fit one project — leave them as placeholders in git.
+
 ## Where things live, per feed
 
 | Layer | Path |
