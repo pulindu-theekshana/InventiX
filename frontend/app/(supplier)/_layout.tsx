@@ -69,7 +69,7 @@ export default function SupplierLayout() {
       />
 
       <Tabs.Screen name="listings/[id]" options={{ href: null, title: 'Listing' }} />
-      <Tabs.Screen name="listings/add" options={{ href: null, title: 'Add listing' }} />
+      <Tabs.Screen name="listings/add" options={{ href: null, title: 'Add product' }} />
       <Tabs.Screen name="orders/[id]" options={{ href: null, title: 'Order' }} />
     </Tabs>
   );
