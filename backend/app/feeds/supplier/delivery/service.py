@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 
 from ....domain import order_state_machine as sm
 from ...shared.notifications import service as notify
-from ..orders.service import SELECT, _get_row, _summary
+from ..orders.service import SELECT, _attach_customers, _get_row, _summary
 from .schemas import StageGroupOut
 
 LABELS = {
@@ -35,6 +35,7 @@ def queue(db, supplier_id: str) -> list[StageGroupOut]:
         .in_("status", list(sm.SUPPLIER_QUEUE))
         .execute().data or []
     )
+    _attach_customers(rows)
     orders = [_summary(r) for r in rows]
 
     groups: list[StageGroupOut] = []
