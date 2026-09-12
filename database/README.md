@@ -6,7 +6,7 @@ Supabase (PostgreSQL). Schema, row level security policies and seed data.
 
 Run in this order, in the Supabase SQL editor or through the Supabase CLI:
 
-1. `migrations/` — `0001` through `0016`, **in numerical order**. They have foreign key
+1. `migrations/` — `0001` through `0020`, **in numerical order**. They have foreign key
    dependencies, so order is not optional.
 2. `functions/` — both files. `policies/profiles.sql` defines `auth_role()` which the other
    policies call, and `seeds/demo_data.sql` calls `apply_stock_adjustment()`, so the functions

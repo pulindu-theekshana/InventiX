@@ -135,6 +135,19 @@ export default function StocksHome() {
               <StockStatusChart summary={summary.data} selected={filter} onSelect={setFilter} />
             ) : null}
 
+            {/*
+              Spec 6.6. The only other way in was the empty state, which disappears as soon
+              as a shop has products -- so the feature became unreachable for every shop
+              that could actually use it.
+            */}
+            <Card onPress={() => router.push('/(customer)/stocks/upload')} style={styles.uploadRow}>
+              <Ionicons name="cloud-upload-outline" size={20} color={colors.accent} />
+              <Text style={[text.label, styles.flex, { color: colors.accent }]}>
+                Upload a sales report
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+            </Card>
+
             <Input
               value={query}
               onChangeText={setQuery}
@@ -227,6 +240,11 @@ function Section({ title, count, tone }: { title: string; count: number; tone: s
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxxl * 2 },
+  uploadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   search: { marginBottom: spacing.lg },
   section: {
     flexDirection: 'row',

@@ -6,7 +6,7 @@
  * Look here when : A live update does not arrive.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -19,12 +19,19 @@ export function useRealtime(
   filter: string | null,
   onChange: () => void,
 ) {
+  /**
+   * One channel name per hook call. Three screens subscribe to `orders`, and two of them are
+   * alive at once while a screen transition finishes -- sharing a name makes the second one
+   * attach to a channel that has already been subscribed, which realtime refuses.
+   */
+  const id = useRef(Math.random().toString(36).slice(2));
+
   useEffect(() => {
     const client = supabase;
     if (!client) return;
 
     const channel = client
-      .channel('realtime:' + table + (filter ? ':' + filter : ''))
+      .channel('realtime:' + table + (filter ? ':' + filter : '') + ':' + id.current)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table, ...(filter ? { filter } : {}) },

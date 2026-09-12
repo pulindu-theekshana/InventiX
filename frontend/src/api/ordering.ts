@@ -38,13 +38,22 @@ export async function generateMessage(
     ].join('\n');
     return mock(body, 120);
   }
-  return request('/customer/ordering/message', {
-    method: 'POST',
-    body: JSON.stringify({
-      supplier_id: supplier?.id,
-      lines: lines.map((l) => ({ stock_item_id: l.stock_item_id, quantity: l.quantity_requested })),
-    }),
-  });
+  /**
+   * The endpoint answers with the body and a list of problems (spec 6.5 -- a line the
+   * supplier cannot fill). Only the body is used here, because the popup does its own
+   * per-line check; surface `problems` too once that check moves to the backend.
+   */
+  const result = await request<{ message_body: string; problems: string[] }>(
+    '/customer/ordering/message',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        supplier_id: supplier?.id,
+        lines: lines.map((l) => ({ stock_item_id: l.stock_item_id, quantity: l.quantity_requested })),
+      }),
+    },
+  );
+  return result.message_body;
 }
 
 /**
@@ -66,7 +75,8 @@ export async function sendOrder(
       channel,
       message_body: draft.message_body,
       message_edited: draft.message_edited,
-      requested_delivery_date: draft.requested_delivery_date,
+      // An emptied date box holds '', which is not a date. Send nothing instead of ''.
+      requested_delivery_date: draft.requested_delivery_date || null,
       notes: draft.notes,
       lines: draft.lines.map((l) => ({
         stock_item_id: l.stock_item_id,

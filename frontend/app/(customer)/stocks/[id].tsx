@@ -20,6 +20,7 @@ import { radius, spacing } from '../../../src/theme/spacing';
 import { text } from '../../../src/theme/typography';
 import { currency, date, quantity } from '../../../src/lib/format';
 import { useAdjustments, useStockItem } from '../../../src/hooks/useStocks';
+import { useSubmit } from '../../../src/hooks/useSubmit';
 import { adjustQuantity, updateThreshold } from '../../../src/api/stocks';
 
 const REASONS = ['manual', 'damage', 'correction'] as const;
@@ -31,31 +32,30 @@ export default function StockDetail() {
   const [threshold, setThreshold] = useState('');
   const [change, setChange] = useState('');
   const [reason, setReason] = useState<(typeof REASONS)[number]>('manual');
-  const [busy, setBusy] = useState(false);
+  const submit = useSubmit();
 
   const data = item.data;
   if (item.loading) return <View style={styles.root} />;
   if (!data) return <ErrorBanner message="That product could not be found." />;
 
   async function saveThreshold() {
-    setBusy(true);
-    await updateThreshold(id, Number(threshold));
+    const ok = await submit.run(() => updateThreshold(id, Number(threshold)));
+    if (!ok) return;
     setThreshold('');
     item.refresh();
-    setBusy(false);
   }
 
   async function saveAdjustment() {
-    setBusy(true);
-    await adjustQuantity(id, Number(change), reason);
+    const ok = await submit.run(() => adjustQuantity(id, Number(change), reason));
+    if (!ok) return;
     setChange('');
     item.refresh();
     history.refresh();
-    setBusy(false);
   }
 
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
+      <ErrorBanner message={submit.error} />
       <Card style={styles.gap}>
         <Text style={text.h2}>{data.product.name}</Text>
         <Text style={[text.label, styles.muted]}>
@@ -86,7 +86,7 @@ export default function StockDetail() {
           label="Save threshold"
           variant="accent"
           disabled={!threshold || Number(threshold) < 0}
-          loading={busy}
+          loading={submit.busy}
           onPress={saveThreshold}
         />
       </Card>
@@ -119,7 +119,7 @@ export default function StockDetail() {
           label="Record adjustment"
           variant="accent"
           disabled={!change || Number.isNaN(Number(change)) || Number(change) === 0}
-          loading={busy}
+          loading={submit.busy}
           onPress={saveAdjustment}
         />
       </Card>

@@ -33,10 +33,16 @@ async function authHeader(): Promise<Record<string, string>> {
 }
 
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  /**
+   * A file upload sends FormData, which writes its own multipart content type with a
+   * boundary. Forcing application/json here made the backend reject every upload.
+   */
+  const isForm = typeof FormData !== 'undefined' && init.body instanceof FormData;
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isForm ? {} : { 'Content-Type': 'application/json' }),
       ...(await authHeader()),
       ...init.headers,
     },

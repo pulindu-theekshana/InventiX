@@ -14,10 +14,12 @@ import { Card } from '../../../src/components/ui/Card';
 import { Input } from '../../../src/components/ui/Input';
 import { Button } from '../../../src/components/ui/Button';
 import { EmptyState } from '../../../src/components/EmptyState';
+import { ErrorBanner } from '../../../src/components/ErrorBanner';
 import { colors } from '../../../src/theme/colors';
 import { radius, spacing } from '../../../src/theme/spacing';
 import { text } from '../../../src/theme/typography';
 import { useAsync } from '../../../src/hooks/useAsync';
+import { useSubmit } from '../../../src/hooks/useSubmit';
 import { searchCatalog } from '../../../src/api/catalog';
 import { addStockItem } from '../../../src/api/stocks';
 import type { CatalogProduct } from '../../../src/types/database';
@@ -27,7 +29,7 @@ export default function AddProduct() {
   const [chosen, setChosen] = useState<CatalogProduct | null>(null);
   const [quantity, setQuantity] = useState('');
   const [threshold, setThreshold] = useState('');
-  const [busy, setBusy] = useState(false);
+  const submit = useSubmit();
   const results = useAsync(() => searchCatalog(query), [query]);
 
   /**
@@ -39,14 +41,15 @@ export default function AddProduct() {
 
   async function save() {
     if (!chosen) return;
-    setBusy(true);
-    await addStockItem({
-      catalog_product_id: chosen.id,
-      quantity_on_hand: Number(quantity),
-      low_threshold: Number(threshold || suggested || 0),
-    });
-    setBusy(false);
-    router.back();
+    const ok = await submit.run(() =>
+      addStockItem({
+        catalog_product_id: chosen.id,
+        quantity_on_hand: Number(quantity),
+        low_threshold: Number(threshold || suggested || 0),
+      }),
+    );
+    // Only leave the screen on success; a refusal must stay visible with the form intact.
+    if (ok) router.back();
   }
 
   if (chosen) {
@@ -88,11 +91,12 @@ export default function AddProduct() {
                 : 'You can change this at any time.'
             }
           />
+          <ErrorBanner message={submit.error} />
           <Button
             label="Add to my stock"
             variant="accent"
             size="lg"
-            loading={busy}
+            loading={submit.busy}
             disabled={!quantity}
             onPress={save}
             fullWidth

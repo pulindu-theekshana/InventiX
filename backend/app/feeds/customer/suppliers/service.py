@@ -116,9 +116,12 @@ def get_profile(db, supplier_id: str, viewer_id: str) -> SupplierProfileOut:
     )
 
     # Scoped to the viewer: a customer must never see another shop's orders.
+    # The value is summed from the items, the same way delivery/service.py does it:
+    # orders carries no total column, because a stored total can disagree with its lines.
     history = (
         db.table("orders")
-        .select("id, reference, status, total_value:id, requested_at")
+        .select("id, reference, status, requested_at, "
+                "order_items(quantity_requested, unit_price_at_order)")
         .eq("supplier_id", supplier_id).eq("customer_id", viewer_id)
         .order("requested_at", desc=True).limit(20)
         .execute().data or []
@@ -133,5 +136,17 @@ def get_profile(db, supplier_id: str, viewer_id: str) -> SupplierProfileOut:
         address=row.data.get("address"),
         delivery_areas=row.data.get("delivery_areas"),
         listings=[listing_to_out(l) for l in listings],
-        order_history=history,
+        order_history=[
+            {
+                "id": o["id"],
+                "reference": o["reference"],
+                "status": o["status"],
+                "requested_at": o["requested_at"],
+                "total_value": sum(
+                    i["quantity_requested"] * float(i["unit_price_at_order"])
+                    for i in (o.get("order_items") or [])
+                ),
+            }
+            for o in history
+        ],
     )

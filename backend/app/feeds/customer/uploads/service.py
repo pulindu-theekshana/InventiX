@@ -31,10 +31,15 @@ def start(db, customer_id: str, filename: str, content: bytes) -> UploadSessionO
         .maybe_single().execute()
     )
     if duplicate and duplicate.data:
-        raise Conflict(
-            f"This report has already been uploaded as '{duplicate.data['file_name']}'. "
-            "Uploading it again would reduce your stock a second time."
-        )
+        if duplicate.data.get("applied_at"):
+            raise Conflict(
+                f"This report has already been uploaded as '{duplicate.data['file_name']}'. "
+                "Uploading it again would reduce your stock a second time."
+            )
+        # An earlier attempt at this file was abandoned before it was applied, so it
+        # changed no quantities and must not block a retry. The unique index on
+        # (customer_id, file_hash) would refuse the new row, so the dead attempt goes.
+        db.table("sales_uploads").delete().eq("id", duplicate.data["id"]).execute()
 
     previous = (
         db.table("sales_uploads").select("column_mapping")

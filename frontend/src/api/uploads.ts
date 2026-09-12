@@ -31,11 +31,43 @@ export interface UnmatchedRow {
  * Spec 6.6 — the backend hashes the file and rejects a duplicate, so stock is never
  * decremented twice from the same report.
  */
-export async function startUpload(fileName: string): Promise<UploadSession> {
+/**
+ * The columns of the uploaded file are parsed, not stored: the backend keeps them in memory
+ * only until the upload is applied. So the mapping screen reads the session from here rather
+ * than fetching it, and both sides forget at the same moment.
+ */
+let current: UploadSession | null = null;
+
+export function currentUpload(): UploadSession | null {
+  return current;
+}
+
+export interface PickedFile {
+  uri: string;
+  name: string;
+  mimeType?: string | null;
+}
+
+/**
+ * Reads a picked file into memory. XMLHttpRequest is used because it handles the file://
+ * scheme that the document picker returns, which fetch does not.
+ */
+function readFile(uri: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', uri);
+    xhr.responseType = 'blob';
+    xhr.onload = () => resolve(xhr.response as Blob);
+    xhr.onerror = () => reject(new Error('That file could not be read. Please choose it again.'));
+    xhr.send();
+  });
+}
+
+export async function startUpload(file: PickedFile): Promise<UploadSession> {
   if (useMockData) {
     return mock({
       id: 'u-new',
-      file_name: fileName,
+      file_name: file.name,
       status: 'needs_mapping' as UploadStatus,
       row_count: 248,
       unmatched_count: 3,
@@ -43,7 +75,26 @@ export async function startUpload(fileName: string): Promise<UploadSession> {
       suggested_mapping: { product: 'Item Name', quantity: 'Qty Sold', date: 'Sale Date' },
     });
   }
-  return request('/customer/uploads', { method: 'POST', body: JSON.stringify({ file_name: fileName }) });
+  /**
+   * The backend hashes the contents to spot a duplicate report, so it needs the file, not
+   * its name.
+   *
+   * Expo's fetch rejects the old React Native {uri, name, type} part -- see
+   * expo/src/winter/fetch/convertFormData.ts, which takes a string, a Blob or something with
+   * bytes(). So the file is read off disk first.
+   *
+   * It must be a plain Blob, not a File: append() writes the filename onto the part as
+   * `value.name`, and a File's name is read-only, which throws. The third argument is how
+   * the name reaches the backend, which needs it to tell a CSV from an .xlsx.
+   */
+  const blob = await readFile(file.uri);
+
+  const form = new FormData();
+  form.append('file', blob, file.name);
+
+  const session = await request<UploadSession>('/customer/uploads', { method: 'POST', body: form });
+  current = session;
+  return session;
 }
 
 export async function saveMapping(

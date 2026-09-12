@@ -71,7 +71,7 @@ export default function DeliveryFeed() {
         <Pressable style={styles.historyLink} onPress={() => router.push('/(customer)/delivery/history')}>
           <Ionicons name="archive-outline" size={18} color={colors.accent} />
           <Text style={[text.label, { color: colors.accent }]}>
-            Rejected and cancelled orders
+            Past orders
           </Text>
           <Ionicons name="chevron-forward" size={16} color={colors.accent} />
         </Pressable>
