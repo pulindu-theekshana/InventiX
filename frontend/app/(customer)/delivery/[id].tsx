@@ -22,13 +22,14 @@ import { text } from '../../../src/theme/typography';
 import { currency, date, quantity } from '../../../src/lib/format';
 import { STAGE } from '../../../src/constants/stages';
 import { useCustomerOrder } from '../../../src/hooks/useOrders';
+import { useSubmit } from '../../../src/hooks/useSubmit';
 import { advanceStage, cancelOrder, confirmReceipt } from '../../../src/api/delivery';
 import { PIPELINE } from '../../../src/types/orderStatus';
 
 export default function OrderDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const order = useCustomerOrder(id);
-  const [busy, setBusy] = useState(false);
+  const submit = useSubmit();
   const [rating, setRating] = useState(false);
   const [dismissed, setDismissed] = useState(0);
 
@@ -44,9 +45,9 @@ export default function OrderDetail() {
   const canAdvance = o.channel !== 'in_app' && PIPELINE.indexOf(o.status) < PIPELINE.length - 1;
 
   async function act(fn: () => Promise<void>, thenRate = false) {
-    setBusy(true);
-    await fn();
-    setBusy(false);
+    // A refused stage change must say so, not leave the button spinning.
+    const ok = await submit.run(fn);
+    if (!ok) return;
     order.refresh();
     if (thenRate) setRating(true);
   }
@@ -54,6 +55,7 @@ export default function OrderDetail() {
   return (
     <View style={styles.root}>
       <ScrollView contentContainerStyle={styles.scroll}>
+        <ErrorBanner message={submit.error} />
         <Card style={styles.gap}>
           <View style={styles.headRow}>
             <View style={styles.flex}>
@@ -120,7 +122,7 @@ export default function OrderDetail() {
             label="Confirm receipt"
             variant="send"
             icon="checkmark-circle-outline"
-            loading={busy}
+            loading={submit.busy}
             onPress={() => act(() => confirmReceipt(id), true)}
             fullWidth
           />
@@ -130,7 +132,7 @@ export default function OrderDetail() {
             label={'Move to ' + STAGE[PIPELINE[PIPELINE.indexOf(o.status) + 1]].label}
             variant="accent"
             icon="arrow-forward"
-            loading={busy}
+            loading={submit.busy}
             onPress={() => act(() => advanceStage(id, PIPELINE[PIPELINE.indexOf(o.status) + 1]))}
             fullWidth
           />
@@ -139,7 +141,7 @@ export default function OrderDetail() {
           <Button
             label="Cancel order"
             variant="outline"
-            loading={busy}
+            loading={submit.busy}
             onPress={() => act(() => cancelOrder(id))}
             fullWidth
           />

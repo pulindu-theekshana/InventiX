@@ -35,7 +35,6 @@ export const CUSTOMER_CONFIRMED: OrderStatus[] = [
   'processing',
   'put_to_delivery',
   'on_the_way',
-  'purchased',
 ];
 
 /** Supplier Orders feed, spec 10.2. Three sections, not two. */
