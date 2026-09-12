@@ -15,8 +15,9 @@ import { Button } from '../../../../src/components/ui/Button';
 import { colors } from '../../../../src/theme/colors';
 import { radius, spacing } from '../../../../src/theme/spacing';
 import { text } from '../../../../src/theme/typography';
-import { useAsync } from '../../../../src/hooks/useAsync';
-import { saveMapping, startUpload } from '../../../../src/api/uploads';
+import { useSubmit } from '../../../../src/hooks/useSubmit';
+import { ErrorBanner } from '../../../../src/components/ErrorBanner';
+import { currentUpload, saveMapping } from '../../../../src/api/uploads';
 
 type Field = 'product' | 'quantity' | 'date';
 
@@ -28,37 +29,42 @@ const FIELDS: { key: Field; label: string; help: string }[] = [
 
 export default function Mapping() {
   const { upload } = useLocalSearchParams<{ upload: string }>();
-  const session = useAsync(() => startUpload('sales_report.csv'), []);
+  const session = currentUpload();
   const [mapping, setMapping] = useState<Record<Field, string | null>>({
     product: null,
     quantity: null,
     date: null,
   });
   const [active, setActive] = useState<Field>('product');
-  const [busy, setBusy] = useState(false);
+  const submit = useSubmit();
 
   /** Pre-fill from the shop's last upload, which is the whole point of storing the mapping. */
   useEffect(() => {
-    if (session.data) setMapping(session.data.suggested_mapping);
-  }, [session.data]);
+    if (session) setMapping(session.suggested_mapping);
+  }, [session]);
 
-  const columns = session.data?.columns ?? [];
+  const columns = session?.columns ?? [];
   const complete = mapping.product && mapping.quantity && mapping.date;
 
   async function next() {
-    setBusy(true);
-    await saveMapping(upload ?? 'u-new', mapping as Record<Field, string>);
-    setBusy(false);
+    const ok = await submit.run(() =>
+      saveMapping(upload ?? 'u-new', mapping as Record<Field, string>),
+    );
+    if (!ok) return;
     router.push(`/(customer)/stocks/upload/unmatched?upload=${upload ?? 'u-new'}`);
   }
 
   return (
     <View style={styles.root}>
       <ScrollView contentContainerStyle={styles.scroll}>
+        <ErrorBanner message={submit.error} />
+        {!session ? (
+          <ErrorBanner message="That upload has expired. Please choose the file again." />
+        ) : null}
         <Card style={styles.gap}>
-          <Text style={text.title}>{session.data?.file_name ?? 'Your file'}</Text>
+          <Text style={text.title}>{session?.file_name ?? 'Your file'}</Text>
           <Text style={[text.caption, styles.muted]}>
-            {session.data?.row_count ?? 0} rows found. Tap a field, then tap the column it
+            {session?.row_count ?? 0} rows found. Tap a field, then tap the column it
             matches.
           </Text>
         </Card>
@@ -108,7 +114,7 @@ export default function Mapping() {
           variant="accent"
           size="lg"
           disabled={!complete}
-          loading={busy}
+          loading={submit.busy}
           onPress={next}
           fullWidth
         />

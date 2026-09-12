@@ -44,7 +44,7 @@ export default function UploadStart() {
       });
       if (result.canceled) return;
       setBusy(true);
-      const session = await startUpload(result.assets[0].name);
+      const session = await startUpload(result.assets[0]);
       router.push(`/(customer)/stocks/upload/mapping?upload=${session.id}`);
     } catch (e) {
       setError(toMessage(e));
