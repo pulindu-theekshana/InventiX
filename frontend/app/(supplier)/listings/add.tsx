@@ -14,10 +14,12 @@ import { Card } from '../../../src/components/ui/Card';
 import { Input } from '../../../src/components/ui/Input';
 import { Button } from '../../../src/components/ui/Button';
 import { EmptyState } from '../../../src/components/EmptyState';
+import { ErrorBanner } from '../../../src/components/ErrorBanner';
 import { colors } from '../../../src/theme/colors';
 import { radius, spacing } from '../../../src/theme/spacing';
 import { text } from '../../../src/theme/typography';
 import { useAsync } from '../../../src/hooks/useAsync';
+import { useSubmit } from '../../../src/hooks/useSubmit';
 import { searchCatalog } from '../../../src/api/catalog';
 import { createListing } from '../../../src/api/listings';
 import type { CatalogProduct } from '../../../src/types/database';
@@ -26,23 +28,25 @@ export default function AddListing() {
   const [query, setQuery] = useState('');
   const [chosen, setChosen] = useState<CatalogProduct | null>(null);
   const [form, setForm] = useState({ quantity: '', price: '', min: '', lead: '' });
-  const [busy, setBusy] = useState(false);
+  const { busy, error, run } = useSubmit();
   const results = useAsync(() => searchCatalog(query), [query]);
 
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
   const canSave = chosen && form.quantity && form.price && form.min && form.lead;
 
+  /** Only leave for the list once the listing actually exists — a refusal belongs on this form. */
   async function save() {
     if (!chosen) return;
-    setBusy(true);
-    await createListing({
-      catalog_product_id: chosen.id,
-      quantity_available: Number(form.quantity),
-      unit_price: Number(form.price),
-      min_order_quantity: Number(form.min),
-      lead_time_days: Number(form.lead),
-    });
-    setBusy(false);
+    const ok = await run(() =>
+      createListing({
+        catalog_product_id: chosen.id,
+        quantity_available: Number(form.quantity),
+        unit_price: Number(form.price),
+        min_order_quantity: Number(form.min),
+        lead_time_days: Number(form.lead),
+      }),
+    );
+    if (!ok) return;
     router.replace('/(supplier)/listings');
   }
 
@@ -113,6 +117,7 @@ export default function AddListing() {
           icon="time-outline"
           hint="Your own estimate. Customers are ranked on your measured time, not this."
         />
+        <ErrorBanner message={error} />
         <Button label="Add listing" variant="accent" size="lg" loading={busy} disabled={!canSave} onPress={save} fullWidth />
       </Card>
     </ScrollView>

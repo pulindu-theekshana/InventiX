@@ -18,13 +18,14 @@ import { colors } from '../../../src/theme/colors';
 import { spacing } from '../../../src/theme/spacing';
 import { text } from '../../../src/theme/typography';
 import { useAsync } from '../../../src/hooks/useAsync';
+import { useSubmit } from '../../../src/hooks/useSubmit';
 import { getListing, setActive, updateListing } from '../../../src/api/listings';
 
 export default function EditListing() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const listing = useAsync(() => getListing(id), [id]);
   const [form, setForm] = useState({ quantity: '', price: '', min: '', lead: '' });
-  const [busy, setBusy] = useState(false);
+  const { busy, error, run } = useSubmit();
 
   useEffect(() => {
     const l = listing.data;
@@ -44,22 +45,22 @@ export default function EditListing() {
 
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
+  /** Stay on the form when the save is refused, so the reason is still on screen. */
   async function save() {
-    setBusy(true);
-    await updateListing(id, {
-      quantity_available: Number(form.quantity),
-      unit_price: Number(form.price),
-      min_order_quantity: Number(form.min),
-      lead_time_days: Number(form.lead),
-    });
-    setBusy(false);
+    const ok = await run(() =>
+      updateListing(id, {
+        quantity_available: Number(form.quantity),
+        unit_price: Number(form.price),
+        min_order_quantity: Number(form.min),
+        lead_time_days: Number(form.lead),
+      }),
+    );
+    if (!ok) return;
     router.back();
   }
 
   async function toggle() {
-    setBusy(true);
-    await setActive(id, !l!.is_active);
-    setBusy(false);
+    if (!(await run(() => setActive(id, !l!.is_active)))) return;
     listing.refresh();
   }
 
@@ -81,6 +82,7 @@ export default function EditListing() {
         <Input label="Price per unit (LKR)" value={form.price} onChangeText={set('price')} keyboardType="decimal-pad" icon="pricetag-outline" />
         <Input label="Smallest order you accept" value={form.min} onChangeText={set('min')} keyboardType="number-pad" icon="funnel-outline" />
         <Input label="Typical delivery time (days)" value={form.lead} onChangeText={set('lead')} keyboardType="number-pad" icon="time-outline" />
+        <ErrorBanner message={error} />
         <Button label="Save changes" variant="accent" size="lg" loading={busy} onPress={save} fullWidth />
       </Card>
 
