@@ -24,7 +24,7 @@ const ITEMS: { icon: keyof typeof Ionicons.glyphMap; label: string; route?: stri
   { icon: 'person-outline', label: 'My profile', route: '/settings/profile' },
   { icon: 'lock-closed-outline', label: 'Change password' },
   { icon: 'notifications-outline', label: 'Notifications', route: '/notifications' },
-  { icon: 'help-buoy-outline', label: 'Help and support' },
+  { icon: 'help-buoy-outline', label: 'Help and support', route: '/settings/help' },
 ];
 
 export default function Settings() {
