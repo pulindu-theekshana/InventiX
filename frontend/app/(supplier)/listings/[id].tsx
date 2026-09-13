@@ -41,7 +41,25 @@ export default function EditListing() {
 
   const l = listing.data;
   if (listing.loading) return <View style={styles.root} />;
-  if (!l) return <ErrorBanner message="That listing could not be found." />;
+  /**
+   * A request that failed and a listing that does not exist are different things, and
+   * useAsync leaves data null for both. Without this branch an expired session or a backend
+   * that is down tells the supplier their listing is missing, and they re-create it.
+   */
+  if (listing.error) {
+    return (
+      <View style={styles.message}>
+        <ErrorBanner message={listing.error} />
+      </View>
+    );
+  }
+  if (!l) {
+    return (
+      <View style={styles.message}>
+        <ErrorBanner message="That listing could not be found." />
+      </View>
+    );
+  }
 
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -107,6 +125,7 @@ export default function EditListing() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
+  message: { flex: 1, backgroundColor: colors.background, padding: spacing.lg },
   scroll: { padding: spacing.lg, gap: spacing.lg },
   gap: { gap: spacing.md },
   muted: { color: colors.textMuted },

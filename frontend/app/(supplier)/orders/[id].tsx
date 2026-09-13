@@ -34,7 +34,25 @@ export default function SupplierOrderDetail() {
 
   const o = order.data;
   if (order.loading) return <View style={styles.root} />;
-  if (!o) return <ErrorBanner message="That order could not be found." />;
+  /**
+   * A request that failed and an order that does not exist are different things, and
+   * useAsync leaves data null for both. Without this branch an expired session or a backend
+   * that is down tells the supplier their order is missing, and they go looking for it.
+   */
+  if (order.error) {
+    return (
+      <View style={styles.notice}>
+        <ErrorBanner message={order.error} />
+      </View>
+    );
+  }
+  if (!o) {
+    return (
+      <View style={styles.notice}>
+        <ErrorBanner message="That order could not be found." />
+      </View>
+    );
+  }
 
   const isPending = o.status === 'requested';
 
@@ -201,6 +219,7 @@ function Line({ icon, value }: { icon: keyof typeof Ionicons.glyphMap; value: st
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
+  notice: { flex: 1, backgroundColor: colors.background, padding: spacing.lg },
   scroll: { padding: spacing.lg, gap: spacing.lg },
   gap: { gap: spacing.md },
   headRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
