@@ -145,6 +145,8 @@ export interface RestockLine {
 export interface RestockDraft {
   supplier: SupplierView | null;
   message_body: string;
+  /** The last text the backend produced, kept so an edit can be detected anywhere. Spec 6.5. */
+  generated_message: string;
   /** True once the customer edits the text. Drives the overwrite warning. Spec 6.5. */
   message_edited: boolean;
   requested_delivery_date: string | null;

@@ -78,6 +78,7 @@ export default function CustomerLayout() {
       {/* Reachable, but not tabs. */}
       <Tabs.Screen name="stocks/[id]" options={{ href: null, title: 'Product' }} />
       <Tabs.Screen name="stocks/add" options={{ href: null, title: 'Add product' }} />
+      <Tabs.Screen name="stocks/restock" options={{ href: null, title: 'Restock request' }} />
       <Tabs.Screen name="stocks/upload/index" options={{ href: null, title: 'Upload sales report' }} />
       <Tabs.Screen name="stocks/upload/mapping" options={{ href: null, title: 'Match the columns' }} />
       <Tabs.Screen name="stocks/upload/unmatched" options={{ href: null, title: 'Unmatched products' }} />

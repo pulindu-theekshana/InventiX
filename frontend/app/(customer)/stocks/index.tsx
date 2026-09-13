@@ -15,7 +15,6 @@ import { SeasonalCard } from '../../../src/components/SeasonalCard';
 import { StockRow } from '../../../src/components/StockRow';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { ErrorBanner } from '../../../src/components/ErrorBanner';
-import { RestockPopup } from '../../../src/components/RestockPopup';
 import { Input } from '../../../src/components/ui/Input';
 import { Card } from '../../../src/components/ui/Card';
 import { colors } from '../../../src/theme/colors';
@@ -35,8 +34,6 @@ export default function StocksHome() {
   const suppliers = useSuppliers('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<StockStatus | null>(null);
-  const [popupOpen, setPopupOpen] = useState(false);
-  const [generated, setGenerated] = useState('');
 
   const items = stocks.data ?? [];
 
@@ -67,16 +64,12 @@ export default function StocksHome() {
     return [...map.entries()].filter(([, list]) => list.length > 1);
   }, [low]);
 
-  /**
-   * A draft can be started from the product page, which then sends the owner here. Focus
-   * rather than mount: this screen stays mounted underneath, so an effect would not re-run.
-   */
+  /** The stock figures move once an order is sent, so refresh on the way back. */
   useFocusEffect(
     useCallback(() => {
-      const pending = draftStore.getDraft();
-      if (pending) {
-        setGenerated(pending.message_body);
-        setPopupOpen(true);
+      if (!draftStore.getDraft()) {
+        stocks.refresh();
+        summary.refresh();
       }
     }, []),
   );
@@ -95,9 +88,8 @@ export default function StocksHome() {
       unit_price: item.unit_price,
     }));
     const { message_body, warnings } = await generateMessage(lines, supplier);
-    setGenerated(message_body);
     draftStore.openDraft(lines, supplier, message_body, warnings);
-    setPopupOpen(true);
+    router.push('/(customer)/stocks/restock');
   }
 
   const loading = stocks.loading || summary.loading;
@@ -219,24 +211,6 @@ export default function StocksHome() {
         <Ionicons name="add" size={28} color={colors.onAccent} />
       </Pressable>
 
-      <RestockPopup
-        visible={popupOpen}
-        generatedMessage={generated}
-        onClose={() => {
-          setPopupOpen(false);
-          draftStore.closeDraft();
-        }}
-        onSent={(orderId) => {
-          setPopupOpen(false);
-          stocks.refresh();
-          summary.refresh();
-          router.push(`/(customer)/delivery/${orderId}`);
-        }}
-        onChangeSupplier={() => {
-          setPopupOpen(false);
-          router.push('/(customer)/suppliers?select=1');
-        }}
-      />
     </View>
   );
 }

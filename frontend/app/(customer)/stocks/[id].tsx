@@ -104,7 +104,7 @@ export default function StockDetail() {
   function openMessage(p: NonNullable<typeof pending>, confirmed = false) {
     setPending(null);
     draftStore.openDraft([p.line], p.supplier, p.message, [...p.warnings, ...p.duplicates], confirmed);
-    router.push('/(customer)/stocks');
+    router.push('/(customer)/stocks/restock');
   }
 
   return (

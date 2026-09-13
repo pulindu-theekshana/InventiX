@@ -158,7 +158,7 @@ uses all three edges.
 
 | # | Layer | What happens |
 |---|---|---|
-| 1 | Screen | `RestockPopup.tsx` — the customer taps **Send**; the channel chooser opens |
+| 1 | Screen | `stocks/restock.tsx` — the customer taps **Send**; the channel chooser opens |
 | 2 | Screen | `handleSend('whatsapp')` calls `sendOrder(draft, channel, idempotencyKey)` |
 | 3 | API file | `api/ordering.ts` builds the body and calls `request('/customer/ordering/send', …)` |
 | 4 | **Edge 1** | `client.ts` calls `supabase.auth.getSession()` to get the JWT |
