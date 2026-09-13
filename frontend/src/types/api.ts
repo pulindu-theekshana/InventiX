@@ -150,6 +150,10 @@ export interface RestockDraft {
   requested_delivery_date: string | null;
   notes: string;
   lines: RestockLine[];
+  /** Same product already on order with someone else. Shown, never blocking. Spec 6.5. */
+  warnings: string[];
+  /** True once the owner has confirmed a repeat order with the same supplier. */
+  allow_duplicate: boolean;
 }
 
 export interface AuthProfile {

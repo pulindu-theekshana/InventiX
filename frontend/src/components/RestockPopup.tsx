@@ -87,6 +87,7 @@ export function RestockPopup({ visible, onClose, onSent, onChangeSupplier, gener
       footer={
         <View style={styles.footer}>
           <ErrorBanner messages={problems} tone="warning" />
+          <ErrorBanner messages={draft?.warnings ?? []} tone="info" />
           <ErrorBanner message={sendError} />
           <View style={styles.footerRow}>
             <Button

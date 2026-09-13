@@ -24,12 +24,20 @@ export function getDraft(): RestockDraft | null {
   return draft;
 }
 
-export function openDraft(lines: RestockLine[], supplier: SupplierView | null, message: string) {
+export function openDraft(
+  lines: RestockLine[],
+  supplier: SupplierView | null,
+  message: string,
+  warnings: string[] = [],
+  allowDuplicate = false,
+) {
   draft = {
     supplier,
     lines,
     message_body: message,
     message_edited: false,
+    warnings,
+    allow_duplicate: allowDuplicate,
     requested_delivery_date: null,
     notes: '',
   };

@@ -6,9 +6,9 @@
  * Look here when : The home screen renders wrongly.
  */
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StockStatusChart } from '../../../src/components/StockStatusChart';
 import { SeasonalCard } from '../../../src/components/SeasonalCard';
@@ -67,6 +67,20 @@ export default function StocksHome() {
     return [...map.entries()].filter(([, list]) => list.length > 1);
   }, [low]);
 
+  /**
+   * A draft can be started from the product page, which then sends the owner here. Focus
+   * rather than mount: this screen stays mounted underneath, so an effect would not re-run.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      const pending = draftStore.getDraft();
+      if (pending) {
+        setGenerated(pending.message_body);
+        setPopupOpen(true);
+      }
+    }, []),
+  );
+
   async function openRestock(chosen: StockItemView[], suggestedQuantity?: number) {
     const supplierName = chosen[0]?.preferred_supplier_name ?? null;
     const supplier = (suppliers.data ?? []).find((s) => s.business_name === supplierName) ?? null;
@@ -80,9 +94,9 @@ export default function StocksHome() {
       min_order_quantity: supplier?.listing?.min_order_quantity ?? null,
       unit_price: item.unit_price,
     }));
-    const message = await generateMessage(lines, supplier);
-    setGenerated(message);
-    draftStore.openDraft(lines, supplier, message);
+    const { message_body, warnings } = await generateMessage(lines, supplier);
+    setGenerated(message_body);
+    draftStore.openDraft(lines, supplier, message_body, warnings);
     setPopupOpen(true);
   }
 

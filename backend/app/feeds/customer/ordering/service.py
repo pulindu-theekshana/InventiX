@@ -13,6 +13,47 @@ from ....integrations import queue
 from .schemas import GenerateMessageOut, OrderLineIn, SendOrderIn, SendOrderOut
 
 
+# An order in one of these states is still expected to arrive, so its products are
+# already on their way and ordering them again would double the delivery.
+OPEN_STATES = ("requested", "confirmed", "processing", "put_to_delivery", "on_the_way")
+
+
+def _open_orders(db, customer_id: str, stock_item_ids: list[str]) -> dict[str, list[dict]]:
+    """
+    Which of these products are already on an order that has not arrived yet.
+
+    Two queries rather than one join: PostgREST would have to make the orders embed
+    inner to filter on its status, and the shape that produces is harder to read
+    than asking twice.
+    """
+    orders = (
+        db.table("orders")
+        .select("id, reference, supplier_id, "
+                "supplier:profiles!orders_supplier_id_fkey(business_name)")
+        .eq("customer_id", customer_id).in_("status", list(OPEN_STATES))
+        .execute().data or []
+    )
+    if not orders:
+        return {}
+
+    by_order = {o["id"]: o for o in orders}
+    rows = (
+        db.table("order_items").select("order_id, stock_item_id")
+        .in_("order_id", list(by_order)).in_("stock_item_id", stock_item_ids)
+        .execute().data or []
+    )
+
+    found: dict[str, list[dict]] = {}
+    for row in rows:
+        order = by_order[row["order_id"]]
+        found.setdefault(row["stock_item_id"], []).append({
+            "reference": order["reference"],
+            "supplier_id": order["supplier_id"],
+            "supplier_name": (order.get("supplier") or {}).get("business_name", "another supplier"),
+        })
+    return found
+
+
 def _load_context(db, customer_id: str, supplier_id: str, lines: list[OrderLineIn]) -> dict:
     """
     Everything the popup needs in three queries rather than one per line: the
@@ -48,6 +89,7 @@ def _load_context(db, customer_id: str, supplier_id: str, lines: list[OrderLineI
         "supplier": supplier.data,
         "items": by_item,
         "listings": {l["catalog_product_id"]: l for l in listings},
+        "open_orders": _open_orders(db, customer_id, ids),
     }
 
 
@@ -82,7 +124,49 @@ def validate(context: dict, lines: list[OrderLineIn]) -> list[str]:
                 f"{supplier_name} needs at least {listing['min_order_quantity']} units of "
                 f"{product['name']} {product['pack_size']}."
             )
+
     return problems
+
+
+def duplicate_refusals(context: dict, lines: list[OrderLineIn]) -> list[str]:
+    """
+    The same product already on an open order with THIS supplier.
+
+    Spec 6.5. Two deliveries of the same thing would both arrive and the stock would
+    rise twice, so this is refused by default -- refused, not forbidden: a shop may
+    genuinely want more. The app turns each of these into a confirmation and sends
+    `allow_duplicate` once the owner has said yes.
+    """
+    supplier_name = context["supplier"]["business_name"]
+    refusals: list[str] = []
+    for line in lines:
+        item = context["items"][line.stock_item_id]
+        product = item["product_catalog"]
+        for open_order in context["open_orders"].get(line.stock_item_id, []):
+            if open_order["supplier_id"] == context["supplier"]["id"]:
+                refusals.append(
+                    f"{product['name']} {product['pack_size']} is already on order "
+                    f"{open_order['reference']} with {supplier_name}."
+                )
+    return refusals
+
+
+def duplicate_warnings(context: dict, lines: list[OrderLineIn]) -> list[str]:
+    """
+    Products already on an open order with someone else. Said out loud, not refused:
+    a shop chasing a slow supplier is doing this deliberately.
+    """
+    warnings: list[str] = []
+    for line in lines:
+        item = context["items"][line.stock_item_id]
+        product = item["product_catalog"]
+        for open_order in context["open_orders"].get(line.stock_item_id, []):
+            if open_order["supplier_id"] != context["supplier"]["id"]:
+                warnings.append(
+                    f"{product['name']} {product['pack_size']} is already on order "
+                    f"{open_order['reference']} with {open_order['supplier_name']}."
+                )
+    return warnings
 
 
 def generate_message(db, customer: dict, supplier_id: str,
@@ -112,6 +196,8 @@ def generate_message(db, customer: dict, supplier_id: str,
             delivery_address=customer.get("address"),
         ),
         problems=validate(context, lines),
+        warnings=duplicate_warnings(context, lines),
+        duplicates=duplicate_refusals(context, lines),
     )
 
 
@@ -138,6 +224,14 @@ def send(db, customer: dict, data: SendOrderIn, idempotency_key: str) -> SendOrd
     problems = validate(context, data.lines)
     if problems:
         raise ValidationFailed(" ".join(problems))
+
+    # Only the owner may waive this, and only after seeing it (spec 6.5).
+    if not data.allow_duplicate:
+        duplicates = duplicate_refusals(context, data.lines)
+        if duplicates:
+            raise ValidationFailed(
+                " ".join(duplicates) + " Confirm the reorder if you meant to order it again."
+            )
 
     # 3. in_app is only offered when the supplier is on InventiX (spec 6.5).
     if data.channel == "in_app" and not context["supplier"].get("is_active"):
