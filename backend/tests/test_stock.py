@@ -12,6 +12,23 @@ from app.core.exceptions import ValidationFailed
 from app.domain import stock
 
 
+class TestDamageDirection:
+    """
+    Spec 6.6. "Damage" and a positive number contradict each other, and the screen used
+    to accept it -- entering 6 damaged packets added six units to the shelf.
+    """
+
+    def test_positive_damage_is_refused(self):
+        with pytest.raises(ValidationFailed, match="only reduce"):
+            stock.validate_adjustment(20, 6, "damage")
+
+    def test_negative_damage_is_fine(self):
+        assert stock.validate_adjustment(20, -6, "damage") == 14
+
+    def test_other_reasons_may_still_add(self):
+        assert stock.validate_adjustment(20, 6, "correction") == 26
+
+
 class TestClassify:
     """
     Spec 6.2 defines exactly three states, and this function is their only
