@@ -33,7 +33,11 @@ export interface ListingInput {
   catalog_product_id: string;
   quantity_available: number;
   unit_price: number;
-  min_order_quantity: number;
+  /**
+   * Optional because ListingIn defaults it to 1. Add product leaves it out to keep the form
+   * to what a supplier must decide; the listing detail screen sets it afterwards.
+   */
+  min_order_quantity?: number;
   lead_time_days: number;
 }
 

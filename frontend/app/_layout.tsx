@@ -58,6 +58,7 @@ export default function RootLayout() {
         <Stack.Screen name="(supplier)" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
         <Stack.Screen name="settings/index" options={{ title: 'Menu' }} />
+        <Stack.Screen name="settings/profile" options={{ title: 'My profile' }} />
       </Stack>
     </SafeAreaProvider>
   );

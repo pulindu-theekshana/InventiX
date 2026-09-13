@@ -22,33 +22,54 @@ import { fontFamily, fontSize, text } from '../../../src/theme/typography';
 import { currency, date, quantity } from '../../../src/lib/format';
 import { STAGE } from '../../../src/constants/stages';
 import { useSupplierOrder } from '../../../src/hooks/useOrders';
+import { useSubmit } from '../../../src/hooks/useSubmit';
 import { confirmOrder, rejectOrder } from '../../../src/api/orders';
 
 export default function SupplierOrderDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const order = useSupplierOrder(id);
-  const [busy, setBusy] = useState(false);
+  const { busy, error, run } = useSubmit();
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
 
   const o = order.data;
   if (order.loading) return <View style={styles.root} />;
-  if (!o) return <ErrorBanner message="That order could not be found." />;
+  /**
+   * A request that failed and an order that does not exist are different things, and
+   * useAsync leaves data null for both. Without this branch an expired session or a backend
+   * that is down tells the supplier their order is missing, and they go looking for it.
+   */
+  if (order.error) {
+    return (
+      <View style={styles.notice}>
+        <ErrorBanner message={order.error} />
+      </View>
+    );
+  }
+  if (!o) {
+    return (
+      <View style={styles.notice}>
+        <ErrorBanner message="That order could not be found." />
+      </View>
+    );
+  }
 
   const isPending = o.status === 'requested';
 
+  /**
+   * Confirm is refused when a listed quantity has fallen below what was ordered, and the
+   * refusal names the product. Only leave the screen once it has actually succeeded —
+   * navigating first would hide the one message that says what to do about it.
+   */
   async function confirm() {
-    setBusy(true);
-    await confirmOrder(id);
-    setBusy(false);
+    if (!(await run(() => confirmOrder(id)))) return;
     order.refresh();
     router.push('/(supplier)/delivery');
   }
 
+  /** Keeps the dialog open on failure, because that is where the error is shown. */
   async function reject() {
-    setBusy(true);
-    await rejectOrder(id, reason.trim());
-    setBusy(false);
+    if (!(await run(() => rejectOrder(id, reason.trim())))) return;
     setRejecting(false);
     order.refresh();
   }
@@ -125,6 +146,7 @@ export default function SupplierOrderDetail() {
 
       {isPending ? (
         <View style={styles.actions}>
+          <ErrorBanner message={error} />
           <Text style={[text.caption, styles.actionNote]}>
             Confirming reserves this quantity from your listings.
           </Text>
@@ -160,7 +182,7 @@ export default function SupplierOrderDetail() {
             <Button
               label="Reject order"
               variant="danger"
-              disabled={reason.trim().length < 3}
+              disabled={reason.trim().length < 5}
               loading={busy}
               onPress={reject}
               style={styles.flex}
@@ -168,9 +190,10 @@ export default function SupplierOrderDetail() {
           </View>
         }
       >
+        <ErrorBanner message={error} />
         <Text style={[text.label, styles.muted]}>
           The customer sees this, and their products return to Low stock so they can order
-          elsewhere. A vague reason wastes their time.
+          elsewhere. A vague reason wastes their time, so it must be at least five characters.
         </Text>
         <TextInput
           value={reason}
@@ -196,6 +219,7 @@ function Line({ icon, value }: { icon: keyof typeof Ionicons.glyphMap; value: st
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
+  notice: { flex: 1, backgroundColor: colors.background, padding: spacing.lg },
   scroll: { padding: spacing.lg, gap: spacing.lg },
   gap: { gap: spacing.md },
   headRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },

@@ -9,6 +9,7 @@ Look here when : An order is in the wrong section, or a supplier confirms stock 
 from datetime import UTC, datetime
 
 from ....core.exceptions import Conflict, NotFound
+from ....core.supabase import service_client
 from ....domain import order_state_machine as sm
 from ...customer.delivery.schemas import (
     OrderDetailOut,
@@ -27,6 +28,36 @@ SELECT = (
     "order_items(id, stock_item_id, listing_id, catalog_product_id, quantity_requested, "
     "unit_price_at_order, product_catalog!inner(name, pack_size))"
 )
+
+
+def _attach_customers(rows: list[dict]) -> None:
+    """
+    Fills in row["customer"], which the caller's own client cannot read.
+
+    RLS on profiles allows exactly two reads: your own row, and any supplier's row.
+    A supplier reading the shop that ordered from them matches neither, so the
+    embedded join in SELECT comes back null and every order reads "Unknown customer"
+    with no phone and no address -- which is the whole of what is needed to deliver it.
+
+    Escalated to the service key rather than widened in the database, because a new
+    policy means a migration and the shared project is already built. Deliberately
+    narrow: only the customers of orders this caller was already allowed to read, and
+    only the four fields the supplier screens show.
+    """
+    ids = {r["customer_id"] for r in rows if r.get("customer_id")}
+    if not ids:
+        return
+    profiles = {
+        p["id"]: p
+        for p in (
+            service_client().table("profiles")
+            .select("id, business_name, city, phone, address")
+            .in_("id", list(ids)).execute().data
+            or []
+        )
+    }
+    for row in rows:
+        row["customer"] = profiles.get(row.get("customer_id")) or {}
 
 
 def _summary(row: dict) -> OrderSummaryOut:
@@ -58,6 +89,7 @@ def list_orders(db, supplier_id: str) -> list[OrderSummaryOut]:
         db.table("orders").select(SELECT).eq("supplier_id", supplier_id)
         .order("requested_at", desc=True).execute().data or []
     )
+    _attach_customers(rows)
     orders = [_summary(r) for r in rows]
     orders.sort(key=lambda o: (
         o.status not in sm.SUPPLIER_PENDING,
@@ -79,6 +111,7 @@ def _get_row(db, supplier_id: str, order_id: str) -> dict:
 
 def get_order(db, supplier_id: str, order_id: str) -> OrderDetailOut:
     row = _get_row(db, supplier_id, order_id)
+    _attach_customers([row])
     customer = row.get("customer") or {}
     rating = (
         db.table("supplier_ratings").select("quality_score, comment")

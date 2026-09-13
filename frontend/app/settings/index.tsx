@@ -21,7 +21,7 @@ import { useAuth } from '../../src/hooks/useAuth';
 import { signOut } from '../../src/stores/authStore';
 
 const ITEMS: { icon: keyof typeof Ionicons.glyphMap; label: string; route?: string }[] = [
-  { icon: 'person-outline', label: 'My profile' },
+  { icon: 'person-outline', label: 'My profile', route: '/settings/profile' },
   { icon: 'lock-closed-outline', label: 'Change password' },
   { icon: 'notifications-outline', label: 'Notifications', route: '/notifications' },
   { icon: 'help-buoy-outline', label: 'Help and support' },
