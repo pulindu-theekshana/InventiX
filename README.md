@@ -1,7 +1,7 @@
 # InventiX
 
 Mobile inventory management for small and medium grocery businesses in Sri Lanka.
-Team 4 — Member P, Member R, Member N, Member I. Target completion 14 September 2026.
+Team 4 — Member P, Member R, Member N, Member I. Target completion 18 September 2026.
 
 ## The three folders
 
