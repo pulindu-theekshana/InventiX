@@ -80,7 +80,7 @@ which is what keeps `status` derived in one place.
 
 **File:** `frontend/src/api/client.ts`
 **Base URL:** `EXPO_PUBLIC_API_URL`
-**Callers:** 11 API files, 27 endpoints
+**Callers:** 12 API files, 43 endpoints
 
 One `fetch()` wrapper. Every request looks like this:
 
@@ -222,34 +222,49 @@ a missing policy is not something FastAPI can protect you from. It never sees th
 
 ## What is connected today
 
+Everything, for the customer side. Verified on a phone against the real backend and the real
+database on 12 September 2026.
+
 | Edge | Status |
 |---|---|
-| 1 — App to Database | **Code written, no project.** No Supabase project exists, so `isSupabaseConfigured` is false and the login screen offers demo buttons instead |
-| 2 — App to Backend | **Code written, nothing to call.** `EXPO_PUBLIC_API_URL` is unset, so all 11 API files return fixtures |
-| 3 — Backend to Database | **Does not exist.** `backend/app/` is still header-only stubs; the SQL in `database/` has been verified but not applied anywhere |
+| 1 — App to Database | **Live.** The Supabase project exists, the schema and seeds are applied, both demo accounts sign in, and realtime is switched on for the four tables the app subscribes to (`migrations/0019_realtime.sql`) |
+| 2 — App to Backend | **Live for the customer side.** `EXPO_PUBLIC_API_URL` is set, so `useMockData` is false and every `api/*.ts` calls the backend. Auth, catalog, stocks, suppliers, ordering, delivery and uploads have each been walked through on a phone |
+| 3 — Backend to Database | **Live.** `backend/.env` holds the project URL and the service key; every feed reads and writes real rows |
 
-So nothing is connected to anything. The app on the phone is running entirely on the fixture data in
-`frontend/src/api/*.ts`.
+The supplier side (listings, orders, supplier delivery) uses the same three edges and the same
+client, but has not been walked through yet.
 
-### What lights up each edge
+### The `useMockData` trap, and why it stopped being one
 
-**Edge 1** — create the Supabase project, apply `database/`, put the URL and anon key in
-`frontend/.env`. The demo buttons disappear and registration becomes real. Data is still fixtures.
-
-**Edges 2 and 3 together** — build the backend and set `EXPO_PUBLIC_API_URL`. These two arrive at
-the same moment, because the backend is the only thing on edge 2 and it is the only thing that
-opens edge 3.
-
-There is a trap in that second step. `useMockData` in `client.ts` is a **single global flag**:
+`client.ts` still has a single global flag:
 
 ```ts
 export const useMockData = !API_BASE_URL;
 ```
 
-The moment `EXPO_PUBLIC_API_URL` is set, all twelve feeds start calling the backend. If only three
-are built, the other nine hit endpoints that do not exist. The fix is to replace the boolean with a
-list of feeds that have gone live, so the migration can happen one feed at a time — cheap to do
-before the backend exists, annoying halfway through.
+The original worry was that setting the variable would send all twelve feeds at a backend where
+only three existed. That never happened: the backend was finished before the variable was set, so
+all 43 endpoints answered from the first request. The flag can stay as it is.
+
+What the flag now protects against is subtler. If `EXPO_PUBLIC_API_URL` is ever missing — a fresh
+clone, a forgotten `--clear`, a teammate who copied `.env.example` — the app silently shows invented
+data instead of failing. Only one screen (`stocks/index.tsx`) renders `MOCK_NOTICE`, so on the other
+fourteen it looks entirely normal. Worth making that case loud before anyone demonstrates this app.
+
+### Lessons from lighting the edges
+
+Three failures cost hours, and none of them looked like what they were:
+
+- **Edge 1 to 2.** Login succeeded while every request came back 401. The token was fine; the
+  backend was verifying it with the wrong algorithm (D-009).
+- **Edge 3.** Sends and quantity changes returned 500 from inside SQL: one ambiguous column name
+  (D-010 concerns the other, a policy refusing the function that exists to satisfy it). Neither was
+  reachable by the backend tests, which run without a database.
+- **Edge 2.** A file upload sent the file's name only, and Expo's replacement `fetch` rejected the
+  React Native form part outright (D-014).
+
+The pattern worth remembering: the backend terminal named the cause every time, in one line, and
+guessing from the phone's error message never did.
 
 ## The two rules this document exists to protect
 

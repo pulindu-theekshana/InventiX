@@ -156,3 +156,107 @@ be retuned once real ratings exist.
 **Affects.** Spec §9.2, §12.2. `database/seeds/app_config.sql`,
 `database/functions/recompute_supplier_ranking.sql`, `frontend/src/components/SupplierRow.tsx`.
 
+---
+
+## D-009 — The backend accepts both token signing schemes, chosen by the token
+Date: 2026-09-12 · Decided by: Pulindu · Status: accepted
+
+**Decision.** `core/security.py` reads the algorithm from the token header. HS256 is verified
+against `SUPABASE_JWT_SECRET`; ES256 and RS256 against the project's published JWKS key. Each
+algorithm may only ever use its own kind of key.
+
+**Reason.** Our Supabase project signs with ES256, and the backend only accepted HS256, so every
+authenticated request failed with "your sign-in could not be verified" even though login worked.
+Accepting both means neither an older project nor a newer one has to be reconfigured.
+
+**Alternatives.** Hard-coding ES256 (rejected: breaks any project still on the shared secret).
+Turning off verification in development (rejected: the check is the authorisation).
+
+**Affects.** Spec §15.2. `backend/app/core/security.py`, `backend/tests/test_security.py`.
+
+---
+
+## D-010 — `apply_stock_adjustment()` runs as its owner and checks ownership itself
+Date: 2026-09-12 · Decided by: Pulindu · Status: accepted
+
+**Decision.** The function is `security definer` with `set search_path = public`, and refuses a
+stock item whose `owner_id` is not `auth.uid()` unless the caller is the service key.
+
+**Reason.** `policies/sales_data.sql` deliberately gives `stock_adjustments` a read policy and no
+insert policy, so the audit trail can only come from this function. But the function ran as the
+signed-in shop, so that same policy refused the function's own insert and every quantity change
+failed — manual adjustments, sales uploads and delivery receipts alike.
+
+**Alternatives.** Adding an insert policy (rejected: any client could then write audit rows
+directly with the anon key, which is exactly what the read-only policy exists to prevent).
+
+**Affects.** Spec §5.10, §15.1. `database/functions/apply_stock_adjustment.sql`.
+
+---
+
+## D-011 — Every write from a screen goes through `useSubmit`
+Date: 2026-09-12 · Decided by: Pulindu · Status: accepted
+
+**Decision.** Screens do not manage their own `busy` flag around a write. They call
+`hooks/useSubmit.ts`, which owns the busy flag and the error message and returns whether the action
+succeeded, so the caller navigates only on success.
+
+**Reason.** Nine screens awaited a write with no `catch`. A refused write left the button spinning
+for ever and the error reached only the developer console, which hid two real backend bugs for
+hours. The shop owner saw nothing at all.
+
+**Alternatives.** A try/catch in each screen (rejected: the same mistake in nine places, and it was
+already made in nine places).
+
+**Affects.** `frontend/src/hooks/useSubmit.ts` and every screen that writes.
+
+---
+
+## D-012 — An upload abandoned before it was applied does not block that file
+Date: 2026-09-12 · Decided by: Pulindu · Status: accepted
+
+**Decision.** The duplicate check in `uploads/service.py` only refuses a file whose earlier upload
+was actually applied. An unapplied attempt is deleted and replaced.
+
+**Reason.** The duplicate guard exists so a report cannot reduce stock twice. An upload that failed
+before applying reduced nothing, but its row still claimed the file's hash, so the owner could never
+retry — and the unique index made a second row impossible.
+
+**Alternatives.** Deleting abandoned uploads on a timer (rejected: more moving parts than the
+problem deserves).
+
+**Affects.** Spec §6.6. `backend/app/feeds/customer/uploads/service.py`.
+
+---
+
+## D-013 — A completed order leaves the live sections
+Date: 2026-09-12 · Decided by: Pulindu · Status: accepted
+
+**Decision.** `CUSTOMER_CONFIRMED` no longer contains `purchased`, so a completed order appears only
+under Past orders. The history link is labelled "Past orders" rather than naming only failures.
+
+**Reason.** A completed order showed in both Confirmed and history at once. The supplier groups
+already excluded it, and `history.tsx` already stated that completed orders are kept out of the two
+live sections — the customer constants simply disagreed with both.
+
+**Affects.** Spec §8.1. `frontend/src/types/orderStatus.ts`, `frontend/app/(customer)/delivery/`.
+
+---
+
+## D-014 — A file upload is read into memory before it is sent
+Date: 2026-09-12 · Decided by: Pulindu · Status: accepted
+
+**Decision.** `api/uploads.ts` reads the picked file with `XMLHttpRequest` into a Blob and appends
+it to `FormData` as a plain Blob with the filename as the third argument. `api/client.ts` does not
+set a JSON content type when the body is `FormData`.
+
+**Reason.** Expo SDK 54+ replaces `fetch` with a WinterCG implementation that rejects React Native's
+`{uri, name, type}` part outright, and `append` writes `value.name`, which throws on a `File`
+because that property is read-only. The previous code sent only the file's name, so the backend
+never received a file at all.
+
+**Alternatives.** `expo-file-system` uploads (rejected: a new dependency for something the existing
+runtime can do). Sending base64 in JSON (rejected: changes the endpoint's contract and inflates the
+payload by a third).
+
+**Affects.** Spec §6.6. `frontend/src/api/uploads.ts`, `frontend/src/api/client.ts`.

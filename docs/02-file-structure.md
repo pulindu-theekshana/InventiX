@@ -245,11 +245,13 @@ frontend/
 |   |   |-- channels.ts
 |   |   `-- stages.ts
 |   |-- hooks/
+|   |   |-- useAsync.ts
 |   |   |-- useAuth.ts
 |   |   |-- useNotifications.ts
 |   |   |-- useOrders.ts
 |   |   |-- useRealtime.ts
 |   |   |-- useStocks.ts
+|   |   |-- useSubmit.ts
 |   |   `-- useSuppliers.ts
 |   |-- lib/
 |   |   |-- errors.ts
@@ -285,7 +287,7 @@ frontend/
 ## Database
 
 Migrations are numbered in dependency order, one table each. A table is never edited in place:
-changing the schema means adding `0016_...sql`, so the database can always be rebuilt from zero
+changing the schema means adding `0021_...sql`, so the database can always be rebuilt from zero
 and every change has a date and an author in git.
 
 Policies are separated from tables deliberately. Row level security is the thing most likely to be
@@ -313,7 +315,12 @@ database/
 |   |-- 0012_seasonal_events.sql
 |   |-- 0013_notifications.sql
 |   |-- 0014_device_tokens.sql
-|   `-- 0015_app_config.sql
+|   |-- 0015_app_config.sql
+|   |-- 0016_supplier_ranking.sql
+|   |-- 0017_create_order.sql
+|   |-- 0018_job_tracking_columns.sql
+|   |-- 0019_realtime.sql
+|   `-- 0020_fix_create_order_ambiguous_reference.sql
 |-- policies/
 |   |-- catalog.sql
 |   |-- notifications.sql

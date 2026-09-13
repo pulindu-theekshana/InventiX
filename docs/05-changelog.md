@@ -14,6 +14,62 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 
 ---
 
+## 2026-09-13 — Phase 2: Customer side connected to the backend
+**Added.** `frontend/src/hooks/useSubmit.ts` — one place that owns the busy flag and the error
+message for a write, because nine screens awaited a write with no `catch`. See D-011.
+
+**Added.** `migrations/0019_realtime.sql` — `orders`, `stock_items`, `notifications` and
+`supplier_listings` added to the `supabase_realtime` publication. Subscriptions had been connecting,
+reporting no error, and never firing.
+
+**Added.** `migrations/0020_fix_create_order_ambiguous_reference.sql` — replaces `create_order()`.
+
+**Added.** A permanent link to the sales report upload on the Stocks screen. The only way in was the
+empty state, so the feature became unreachable as soon as a shop had any products.
+
+**Added.** `CLAUDE.md`, `docs/11-integration-plan.pdf`, `docs/12-supplier-handover.pdf`.
+
+**Changed.** `core/security.py` accepts ES256 and RS256 tokens as well as HS256, choosing the key by
+the token's own algorithm. Our Supabase project signs with ES256, so every request had been 401.
+See D-009.
+
+**Changed.** `apply_stock_adjustment()` is now `security definer` and checks ownership itself. See
+D-010.
+
+**Changed.** `api/uploads.ts` sends the file rather than its name, reading it into a Blob first,
+because Expo's fetch rejects React Native's `{uri}` part. See D-014.
+
+**Changed.** The upload mapping screen reads the session started by the upload screen instead of
+starting a second upload.
+
+**Changed.** An upload abandoned before it was applied no longer blocks re-uploading that file. See
+D-012.
+
+**Changed.** `CUSTOMER_CONFIRMED` no longer includes `purchased`. See D-013.
+
+**Fixed.** `create_order()` failed on every send: `returning reference` was ambiguous against the
+function's own `reference` output column (42702). The 119 backend tests could not catch it — they
+run without a database.
+
+**Fixed.** The supplier profile showed an order's UUID where its total belongs; the query had
+aliased `total_value:id`. The value is now summed from the order's items.
+
+**Fixed.** `useRealtime` gives each subscription its own channel name. Three screens subscribe to
+`orders`, and two are alive at once during a screen change, which realtime refuses.
+
+**Fixed.** The restock message endpoint answers with `{ message_body, problems }`, not text; a
+cleared delivery date sent `''` and was refused.
+
+**Verified on a phone against the real backend and database:** auth, catalog, stocks, suppliers,
+ordering, delivery and sales report uploads.
+
+**Decisions.** D-009 to D-014.
+
+**Next.** Supplier side (listings, orders, supplier delivery), then the full order journey across
+both roles. Then saving a rating, which is collected and discarded today.
+
+---
+
 ## 2026-09-03 — Phase 1a: Database schema, policies and seeds
 **Added.** All 16 migrations, both SQL functions, all 9 policy files and all 4 seeds — 31 files,
 1,373 lines. Every table from specification §5, with the constraints that carry a rule written as

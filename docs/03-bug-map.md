@@ -16,6 +16,7 @@ block at the top of every source file, so the two can never disagree if you keep
 | A channel is offered when it should not be. | `frontend/src/constants/channels.ts` |
 | A chart on the phone cannot read the report data. | `backend/app/feeds/customer/reports/schemas.py` |
 | A colour is inconsistent with the brand guide. | `frontend/src/theme/colors.ts` |
+| A completed order appears in a live section as well as history. | `frontend/src/types/orderStatus.ts` |
 | A customer taps Send once but two orders appear. | `backend/app/core/idempotency.py` |
 | A delivery endpoint fails or an action button does nothing. | `backend/app/feeds/customer/delivery/routes.py` |
 | A dialog behaves oddly. | `frontend/src/components/ui/Modal.tsx` |
@@ -48,6 +49,8 @@ block at the top of every source file, so the two can never disagree if you keep
 | A report endpoint fails. | `backend/app/feeds/customer/reports/routes.py` |
 | A report number looks wrong or a report is slow. | `backend/app/feeds/customer/reports/service.py` |
 | A requested item still opens the popup. | `frontend/src/components/StockRow.tsx` |
+| A sales report will not upload, or the backend says the file is missing. | `frontend/src/api/uploads.ts` |
+| A save button never stops loading, or a backend refusal never reaches the screen. | `frontend/src/hooks/useSubmit.ts` |
 | A screen is slow because it is computing predictions live. | `backend/app/ml/storage.py` |
 | A secret or junk file shows up in git status. | `backend/.gitignore` |
 | A setting reads as None or the wrong value. | `backend/app/config.py` |
@@ -109,6 +112,7 @@ block at the top of every source file, so the two can never disagree if you keep
 | An upload gets stuck in a status, or a duplicate file is not rejected. | `backend/app/feeds/customer/uploads/service.py` |
 | An upload step fails from the app. | `frontend/src/api/uploads.ts` |
 | An upload step returns an error. | `backend/app/feeds/customer/uploads/routes.py` |
+| An upload that was never applied blocks re-uploading that file. | `backend/app/feeds/customer/uploads/service.py` |
 | Auth or realtime fails. | `frontend/src/lib/supabase.ts` |
 | Auth screens have wrong headers or back behaviour. | `frontend/app/(auth)/_layout.tsx` |
 | Available quantity does not drop after confirming, or a deactivated listing still appears in search. | `backend/app/feeds/supplier/listings/service.py` |
@@ -122,6 +126,7 @@ block at the top of every source file, so the two can never disagree if you keep
 | Config values are missing on a fresh install. | `database/seeds/app_config.sql` |
 | Confirm or Reject misbehaves. | `frontend/app/(supplier)/orders/[id].tsx` |
 | Confirm or Reject returns an error. | `backend/app/feeds/supplier/orders/routes.py` |
+| Data is correct but only appears after pulling to refresh. | `database/migrations/0019_realtime.sql` |
 | Delivery screens show no data. | `frontend/src/api/delivery.ts` |
 | Editing a listing fails. | `frontend/app/(supplier)/listings/[id].tsx` |
 | Every database call fails, or RLS blocks a call it should not. | `backend/app/core/supabase.py` |
@@ -160,6 +165,7 @@ block at the top of every source file, so the two can never disagree if you keep
 | Segment counts are wrong or tapping does nothing. | `frontend/src/components/StockStatusChart.tsx` |
 | Send is wrongly disabled or enabled, the wrong supplier is used, or stock is not marked as requested. | `backend/app/feeds/customer/ordering/service.py` |
 | Send is wrongly disabled, or changing supplier loses an edit without warning. | `frontend/src/components/RestockPopup.tsx` |
+| Sending a restock order returns 500 and the log says 42702. | `database/migrations/0020_fix_create_order_ambiguous_reference.sql` |
 | Stock data is stale after a change. | `frontend/src/hooks/useStocks.ts` |
 | Stock was reduced twice, or half an upload was applied. | `backend/app/feeds/customer/uploads/applier.py` |
 | Suggested thresholds are wrong. | `backend/app/ml/threshold_suggestion.py` |
@@ -188,6 +194,7 @@ block at the top of every source file, so the two can never disagree if you keep
 | The popup cannot load, or Send returns an error. | `backend/app/feeds/customer/ordering/routes.py` |
 | The product picker shows the wrong fields. | `backend/app/feeds/shared/catalog/schemas.py` |
 | The reports feed renders wrongly. | `frontend/app/(customer)/reports/index.tsx` |
+| The restock popup shows an object instead of the message text. | `frontend/src/api/ordering.ts` |
 | The server will not start, CORS blocks the app, or an error returns the wrong shape. | `backend/app/main.py` |
 | The smart dashboard has nothing to warn about. | `database/seeds/seasonal_events.sql` |
 | The supplier order card is missing a field. | `backend/app/feeds/supplier/orders/schemas.py` |
