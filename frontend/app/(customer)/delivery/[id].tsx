@@ -15,6 +15,7 @@ import { Button } from '../../../src/components/ui/Button';
 import { Badge } from '../../../src/components/ui/Badge';
 import { StageProgress } from '../../../src/components/StageProgress';
 import { RatingPrompt } from '../../../src/components/RatingPrompt';
+import { ConfirmReceiptPrompt } from '../../../src/components/ConfirmReceiptPrompt';
 import { ErrorBanner } from '../../../src/components/ErrorBanner';
 import { colors } from '../../../src/theme/colors';
 import { radius, spacing } from '../../../src/theme/spacing';
@@ -32,6 +33,8 @@ export default function OrderDetail() {
   const submit = useSubmit();
   const [rating, setRating] = useState(false);
   const [dismissed, setDismissed] = useState(0);
+  /** Confirm receipt tops up stock and cannot be undone, so it is asked about first. */
+  const [confirming, setConfirming] = useState(false);
 
   const o = order.data;
   if (order.loading) return <View style={styles.root} />;
@@ -123,7 +126,7 @@ export default function OrderDetail() {
             variant="send"
             icon="checkmark-circle-outline"
             loading={submit.busy}
-            onPress={() => act(() => confirmReceipt(id), true)}
+            onPress={() => setConfirming(true)}
             fullWidth
           />
         ) : null}
@@ -156,6 +159,19 @@ export default function OrderDetail() {
           />
         ) : null}
       </View>
+
+      {/* Asked before the only action that tops up stock, because it cannot be undone. */}
+      <ConfirmReceiptPrompt
+        visible={confirming}
+        supplierName={o.counterparty_name}
+        units={o.total_quantity}
+        busy={submit.busy}
+        onConfirm={async () => {
+          setConfirming(false);
+          await act(() => confirmReceipt(id), true);
+        }}
+        onCancel={() => setConfirming(false)}
+      />
 
       {/* Spec 12.3 — prompted immediately after confirming receipt, skippable, shown twice. */}
       <RatingPrompt
