@@ -6,16 +6,22 @@ Spec    : Section 6.5
 Look here when : Send is wrongly disabled or enabled, the wrong supplier is used, or stock is not marked as requested.
 """
 
+import logging
+
 from ....core import idempotency
 from ....core.exceptions import NotFound, ValidationFailed
 from ....domain import message_builder
 from ....integrations import queue
+from ...shared.notifications import service as notify
 from .schemas import GenerateMessageOut, OrderLineIn, SendOrderIn, SendOrderOut
 
 
 # An order in one of these states is still expected to arrive, so its products are
 # already on their way and ordering them again would double the delivery.
 OPEN_STATES = ("requested", "confirmed", "processing", "put_to_delivery", "on_the_way")
+
+
+log = logging.getLogger(__name__)
 
 
 def _open_orders(db, customer_id: str, stock_item_ids: list[str]) -> dict[str, list[dict]]:
@@ -291,6 +297,21 @@ def send(db, customer: dict, data: SendOrderIn, idempotency_key: str) -> SendOrd
     )
     if not sent:
         queue.enqueue(order_id, data.channel, {"reason": detail})
+
+    # 6. Spec 13. Nothing told the supplier an order had arrived: they only found out by
+    #    happening to look at their Orders screen. Written after the order exists and
+    #    swallowed on failure, because a missing notification must never lose an order.
+    try:
+        notify.notify(
+            data.supplier_id,
+            "order_received",
+            f"New order {reference} from {customer['business_name']}",
+            f"{len(payload)} product(s), {sum(l['quantity'] for l in payload)} units. "
+            "Confirm or decline it in Orders.",
+            order_id=order_id,
+        )
+    except Exception:
+        log.exception("could not notify supplier %s about order %s", data.supplier_id, order_id)
 
     return SendOrderOut(order_id=order_id, reference=reference,
                         message_sent=sent, message_detail=None if sent else detail)

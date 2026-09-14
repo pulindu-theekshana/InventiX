@@ -77,7 +77,7 @@ export default function Restock() {
    */
   function handleChangeSupplier() {
     if (draft && draft.message_edited) setConfirmingSupplierChange(true);
-    else router.push('/(customer)/restock/supplier');
+    else router.push('/(customer)/restock/supplier' as never);
   }
 
   async function handleSend(channel: Channel) {
@@ -287,7 +287,7 @@ export default function Restock() {
               variant="accent"
               onPress={() => {
                 setConfirmingSupplierChange(false);
-                router.push('/(customer)/restock/supplier');
+                router.push('/(customer)/restock/supplier' as never);
               }}
               style={styles.flex}
             />

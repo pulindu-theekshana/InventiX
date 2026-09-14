@@ -23,6 +23,7 @@ import { markRead } from '../src/api/notifications';
 /** Every type backend/app/feeds and backend/app/jobs can send. Spec 13. */
 const ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   low_stock: 'trending-down',
+  order_received: 'cart',
   supplier_delivered: 'cube',
   order_rejected: 'close-circle',
   order_cancelled: 'close-circle',
@@ -39,6 +40,7 @@ const ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
 
 const TINT: Record<string, string> = {
   low_stock: colors.warning,
+  order_received: colors.accent,
   supplier_delivered: colors.info,
   order_rejected: colors.danger,
   order_cancelled: colors.danger,
