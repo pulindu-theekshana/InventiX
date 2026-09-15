@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 
 from ....core.exceptions import Conflict, NotFound
 from ....core.supabase import service_client
+from ....domain import order_labels
 from ....domain import order_state_machine as sm
 from ...customer.delivery.schemas import (
     OrderDetailOut,
@@ -74,6 +75,7 @@ def _summary(row: dict) -> OrderSummaryOut:
         requested_delivery_date=row.get("requested_delivery_date"),
         supplier_marked_delivered_at=row.get("supplier_marked_delivered_at"),
         rejection_reason=row.get("rejection_reason"),
+        product_summary=order_labels.product_summary(items),
     )
 
 

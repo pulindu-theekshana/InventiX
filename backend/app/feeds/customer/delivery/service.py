@@ -9,8 +9,8 @@ Look here when : An order sits in the wrong section, or confirming receipt does 
 from datetime import UTC, datetime
 
 from ....core.exceptions import Forbidden, NotFound
+from ....domain import order_labels, stock
 from ....domain import order_state_machine as sm
-from ....domain import stock
 from ...shared.notifications import service as notify
 from .schemas import OrderDetailOut, OrderItemOut, OrderSummaryOut, StageEventOut
 
@@ -42,6 +42,7 @@ def _summary(row: dict) -> OrderSummaryOut:
         requested_delivery_date=row.get("requested_delivery_date"),
         supplier_marked_delivered_at=row.get("supplier_marked_delivered_at"),
         rejection_reason=row.get("rejection_reason"),
+        product_summary=order_labels.product_summary(items),
     )
 
 

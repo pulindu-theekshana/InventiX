@@ -40,7 +40,11 @@ export function OrderCard({ order, onPress, showProgress = true, action }: Props
     <Card onPress={onPress} style={styles.card}>
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text style={text.bodyStrong}>{order.reference}</Text>
+          {/* The reference alone tells nobody which order this is. */}
+          <Text style={text.bodyStrong} numberOfLines={1}>
+            {order.reference}
+            {order.product_summary ? ' · ' + order.product_summary : ''}
+          </Text>
           <Text style={[text.caption, styles.muted]} numberOfLines={1}>
             {order.counterparty_name}
             {order.counterparty_city ? ' · ' + order.counterparty_city : ''}

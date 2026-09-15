@@ -7,7 +7,7 @@ Look here when : The wrong suppliers appear, or measured delivery time looks wro
 """
 
 from ....core.exceptions import NotFound
-from ....domain import config_store, ranking
+from ....domain import config_store, order_labels, ranking
 from ...supplier.listings.service import _to_out as listing_to_out
 from .schemas import ListingSummaryOut, SupplierOut, SupplierProfileOut
 
@@ -121,7 +121,8 @@ def get_profile(db, supplier_id: str, viewer_id: str) -> SupplierProfileOut:
     history = (
         db.table("orders")
         .select("id, reference, status, requested_at, "
-                "order_items(quantity_requested, unit_price_at_order)")
+                "order_items(quantity_requested, unit_price_at_order, "
+                "product_catalog!inner(name))")
         .eq("supplier_id", supplier_id).eq("customer_id", viewer_id)
         .order("requested_at", desc=True).limit(20)
         .execute().data or []
@@ -146,6 +147,8 @@ def get_profile(db, supplier_id: str, viewer_id: str) -> SupplierProfileOut:
                     i["quantity_requested"] * float(i["unit_price_at_order"])
                     for i in (o.get("order_items") or [])
                 ),
+                # Same label the delivery feeds show, so one order reads the same everywhere.
+                "product_summary": order_labels.product_summary(o.get("order_items") or []),
             }
             for o in history
         ],

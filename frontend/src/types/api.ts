@@ -112,6 +112,8 @@ export interface OrderSummary {
   requested_delivery_date: string | null;
   supplier_marked_delivered_at: string | null;
   rejection_reason: string | null;
+  /** "Papadam", or "Papadam +2 more". Null on an order with no lines. */
+  product_summary: string | null;
 }
 
 export interface OrderDetailView extends OrderSummary {

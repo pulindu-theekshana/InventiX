@@ -43,6 +43,9 @@ class OrderSummaryOut(BaseModel):
     # Spec 11.3: a claim, not a status. The order stays on_the_way until confirmed.
     supplier_marked_delivered_at: str | None = None
     rejection_reason: str | None = None
+    # What the order is for, shown beside the reference. A code alone tells nobody
+    # which order it is. Built by domain.order_labels so both feeds read the same.
+    product_summary: str | None = None
 
 
 class OrderDetailOut(OrderSummaryOut):
