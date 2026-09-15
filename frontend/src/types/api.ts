@@ -168,3 +168,41 @@ export interface ReportSection {
   description: string;
   icon: string;
 }
+
+/** One day on the inventory line. Spec 7.1. */
+export interface TrendPoint {
+  date: string;
+  total_units: number;
+}
+
+export interface InventoryLine {
+  stock_item_id: string;
+  name: string;
+  pack_size: string;
+  quantity_on_hand: number;
+  low_threshold: number;
+  unit_price: number | null;
+  value: number | null;
+  status: StockStatus;
+}
+
+/**
+ * Spec 7.1. Every figure is computed by the backend, including `status`, which comes from
+ * the same classifier the pie chart reads — so a report cannot disagree with the Stocks
+ * screen it was generated from.
+ */
+export interface InventoryReport {
+  generated_at: string;
+  days: number;
+  total_products: number;
+  total_units: number;
+  /** Null, not zero, when nothing has a price — zero would read as "worth nothing". */
+  total_value: number | null;
+  priced_products: number;
+  in_stock: number;
+  low_stock: number;
+  restock_requested: number;
+  at_zero: number;
+  trend: TrendPoint[];
+  items: InventoryLine[];
+}
