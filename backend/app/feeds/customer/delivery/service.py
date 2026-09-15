@@ -7,13 +7,12 @@ Look here when : An order sits in the wrong section, or confirming receipt does 
 """
 
 import logging
-
 from datetime import UTC, datetime
 
 from ....core.exceptions import Conflict, Forbidden, NotFound, ValidationFailed
 from ....core.supabase import service_client
+from ....domain import order_labels, stock
 from ....domain import order_state_machine as sm
-from ....domain import stock
 from ...shared.notifications import service as notify
 from .schemas import OrderDetailOut, OrderItemOut, OrderSummaryOut, StageEventOut
 
@@ -47,6 +46,7 @@ def _summary(row: dict) -> OrderSummaryOut:
         requested_delivery_date=row.get("requested_delivery_date"),
         supplier_marked_delivered_at=row.get("supplier_marked_delivered_at"),
         rejection_reason=row.get("rejection_reason"),
+        product_summary=order_labels.product_summary(items),
     )
 
 
@@ -140,7 +140,7 @@ def confirm_receipt(db, customer_id: str, order_id: str) -> None:
 
     notify.notify(
         row["supplier_id"], "order_completed",
-        f"{row['reference']} is complete",
+        f"{order_labels.titled(row['reference'], row.get('order_items') or [])} is complete",
         "The customer has confirmed receipt.",
         order_id=order_id,
     )
@@ -209,7 +209,8 @@ def cancel(db, customer_id: str, order_id: str) -> None:
 
     _set_status(db, order_id, sm.CANCELLED)
     notify.notify(row["supplier_id"], "order_cancelled",
-                  f"{row['reference']} was cancelled",
+                  f"{order_labels.titled(row['reference'], row.get('order_items') or [])}"
+                  " was cancelled",
                   "The customer withdrew this order.", order_id=order_id)
 
 

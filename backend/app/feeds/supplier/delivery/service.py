@@ -8,6 +8,7 @@ Look here when : Marking delivered wrongly completes the order, or an order is m
 
 from datetime import UTC, datetime
 
+from ....domain import order_labels
 from ....domain import order_state_machine as sm
 from ...shared.notifications import service as notify
 from ..orders.service import SELECT, _attach_customers, _get_row, _summary
@@ -66,7 +67,8 @@ def advance(db, supplier_id: str, order_id: str, target: str) -> None:
 
     notify.notify(
         row["customer_id"], "stage_change",
-        f"{row['reference']} is now {target.replace('_', ' ')}",
+        f"{order_labels.titled(row['reference'], row.get('order_items') or [])}"
+        f" is now {target.replace('_', ' ')}",
         "Your order has moved to the next stage.", order_id=order_id,
     )
 
@@ -94,6 +96,7 @@ def mark_delivered(db, supplier_id: str, order_id: str) -> None:
 
     notify.notify(
         row["customer_id"], "supplier_delivered",
-        f"{row['reference']} has been delivered",
+        f"{order_labels.titled(row['reference'], row.get('order_items') or [])}"
+        " has been delivered",
         "Confirm receipt so your stock is topped up.", order_id=order_id,
     )

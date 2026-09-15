@@ -62,7 +62,10 @@ export default function OrderDetail() {
         <Card style={styles.gap}>
           <View style={styles.headRow}>
             <View style={styles.flex}>
-              <Text style={text.h2}>{o.reference}</Text>
+              <Text style={text.h2}>
+                {o.reference}
+                {o.product_summary ? ' · ' + o.product_summary : ''}
+              </Text>
               <Text style={[text.label, styles.muted]}>{o.counterparty_name}</Text>
             </View>
             <Badge label={STAGE[o.status].label} tone={o.status === 'rejected' ? 'danger' : 'info'} />

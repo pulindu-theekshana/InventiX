@@ -126,7 +126,10 @@ export default function SupplierProfile() {
         ) : (
           s.order_history.map((o) => (
             <View key={o.id} style={styles.listing}>
-              <Text style={[text.label, styles.flex]}>{o.reference}</Text>
+              <Text style={[text.label, styles.flex]} numberOfLines={1}>
+                {o.reference}
+                {o.product_summary ? ' · ' + o.product_summary : ''}
+              </Text>
               <Text style={[text.caption, styles.muted]}>{currency(o.total_value)}</Text>
             </View>
           ))

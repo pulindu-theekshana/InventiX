@@ -10,7 +10,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from ..core.supabase import service_client
-from ..domain import config_store
+from ..domain import config_store, order_labels
 from ..feeds.shared.notifications import service as notify
 
 log = logging.getLogger(__name__)
@@ -31,6 +31,7 @@ def run() -> None:
     rows = (
         db.table("orders")
         .select("id, reference, customer_id, supplier_id, requested_at, "
+                "order_items(product_catalog!inner(name)), "
                 "customer:profiles!orders_customer_id_fkey(business_name), "
                 "supplier:profiles!orders_supplier_id_fkey(business_name)")
         .eq("status", "requested").lt("requested_at", cutoff)
@@ -42,17 +43,18 @@ def run() -> None:
     for order in rows:
         supplier_name = (order.get("supplier") or {}).get("business_name", "your supplier")
         customer_name = (order.get("customer") or {}).get("business_name", "a customer")
+        titled = order_labels.titled(order["reference"], order.get("order_items") or [])
 
         notify.notify(
             order["customer_id"], "order_unanswered",
-            f"{order['reference']} has had no reply",
+            f"{titled} has had no reply",
             f"{supplier_name} has not responded in {hours} hours. "
             "You may want to try another supplier.",
             order_id=order["id"],
         )
         notify.notify(
             order["supplier_id"], "order_ageing",
-            f"{order['reference']} is still waiting",
+            f"{titled} is still waiting",
             f"{customer_name} has been waiting {hours} hours for a reply.",
             order_id=order["id"],
         )
