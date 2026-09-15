@@ -56,6 +56,7 @@ export default function ReportsHome() {
   );
 
   const period = PERIODS.find((p) => p.days === days) ?? PERIODS[1];
+  const recent = history.filter((h) => h.kind === tab);
 
   async function generate(kind: Tab) {
     const next = await recordReport({
@@ -200,14 +201,17 @@ export default function ReportsHome() {
         </>
       )}
 
+      {/* Scoped to the open tab: an inventory report listed under Sales reads as a sales one. */}
       <View style={styles.recent}>
         <Text style={text.title}>Recent reports</Text>
-        {history.length === 0 ? (
+        {recent.length === 0 ? (
           <Text style={[text.caption, styles.muted]}>
-            Nothing generated yet. Reports you create appear here.
+            {tab === 'inventory'
+              ? 'Nothing generated yet. Inventory reports you create appear here.'
+              : 'No sales reports yet. They appear here once you have sales history.'}
           </Text>
         ) : (
-          history.map((h) => (
+          recent.map((h) => (
             <Card
               key={h.id}
               onPress={() => router.push(`/(customer)/reports/${h.kind}?days=${h.days}`)}
