@@ -8,7 +8,7 @@
 
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useTabScreenOptions } from '../../src/hooks/useTabScreenOptions';
+import { TAB_ICON_SIZE, useTabScreenOptions } from '../../src/hooks/useTabScreenOptions';
 
 export default function CustomerLayout() {
   const screenOptions = useTabScreenOptions();
@@ -19,28 +19,28 @@ export default function CustomerLayout() {
         name="stocks/index"
         options={{
           title: 'Stocks',
-          tabBarIcon: ({ color, size }) => <Ionicons name="layers-outline" size={size} color={color as string} />,
+          tabBarIcon: ({ color }) => <Ionicons name="layers-outline" size={TAB_ICON_SIZE} color={color as string} />,
         }}
       />
       <Tabs.Screen
         name="reports/index"
         options={{
           title: 'Reports',
-          tabBarIcon: ({ color, size }) => <Ionicons name="analytics-outline" size={size} color={color as string} />,
+          tabBarIcon: ({ color }) => <Ionicons name="analytics-outline" size={TAB_ICON_SIZE} color={color as string} />,
         }}
       />
       <Tabs.Screen
         name="delivery/index"
         options={{
           title: 'Delivery',
-          tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" size={size} color={color as string} />,
+          tabBarIcon: ({ color }) => <Ionicons name="cube-outline" size={TAB_ICON_SIZE} color={color as string} />,
         }}
       />
       <Tabs.Screen
         name="suppliers/index"
         options={{
           title: 'Suppliers',
-          tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color as string} />,
+          tabBarIcon: ({ color }) => <Ionicons name="people-outline" size={TAB_ICON_SIZE} color={color as string} />,
         }}
       />
 

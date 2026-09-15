@@ -11,13 +11,18 @@ import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabHeaderButtons } from '../components/TabHeaderButtons';
 import { colors } from '../theme/colors';
-import { text } from '../theme/typography';
+import { fontSize, text } from '../theme/typography';
 
 type TabScreenOptions = NonNullable<ComponentProps<typeof Tabs>['screenOptions']>;
 
 /** Height of the bar itself, before anything the operating system reserves below it. */
 const BAR_HEIGHT = 62;
 const BAR_PADDING_BOTTOM = 8;
+/** The bar's own geometry, unchanged: the larger icon and label still fit inside it. */
+const BAR_PADDING_TOP = 6;
+
+/** A step up from the navigator's 24pt default. Sized to the room BAR_HEIGHT leaves. */
+export const TAB_ICON_SIZE = 26;
 
 export function useTabScreenOptions(): TabScreenOptions {
   const insets = useSafeAreaInsets();
@@ -31,7 +36,8 @@ export function useTabScreenOptions(): TabScreenOptions {
     headerRight: () => <TabHeaderButtons />,
     tabBarActiveTintColor: colors.accent,
     tabBarInactiveTintColor: colors.textSubtle,
-    tabBarLabelStyle: text.caption,
+    /** One step up the type scale from caption, so the labels match the larger icons. */
+    tabBarLabelStyle: { ...text.caption, fontSize: fontSize.sm, lineHeight: 16 },
     /**
      * The bar has to clear whatever the operating system owns along the bottom edge: Android's
      * navigation bar, which draws over the app because app.json turns edge to edge on, or the
@@ -44,7 +50,7 @@ export function useTabScreenOptions(): TabScreenOptions {
       borderTopColor: colors.border,
       height: BAR_HEIGHT + insets.bottom,
       paddingBottom: BAR_PADDING_BOTTOM + insets.bottom,
-      paddingTop: 6,
+      paddingTop: BAR_PADDING_TOP,
     },
     sceneStyle: { backgroundColor: colors.background },
   };
