@@ -70,6 +70,12 @@ def validate_adjustment(quantity_on_hand: int, change: int, reason: str) -> int:
         raise ValidationFailed("An adjustment of zero would not change anything.")
     if reason not in ALL_REASONS:
         raise ValidationFailed(f"'{reason}' is not a reason we record.")
+    if reason == "damage" and change > 0:
+        # The word and the number have to agree. A positive "damage" row reads as
+        # stock arriving because it was damaged, and quietly inflates the count.
+        raise ValidationFailed(
+            f"Damage can only reduce stock. Enter how many were damaged, not {change}."
+        )
 
     result = quantity_on_hand + change
     if result < 0:

@@ -164,7 +164,7 @@ block at the top of every source file, so the two can never disagree if you keep
 | Seasonal suggestions are far off. | `backend/app/ml/seasonal_uplift.py` |
 | Segment counts are wrong or tapping does nothing. | `frontend/src/components/StockStatusChart.tsx` |
 | Send is wrongly disabled or enabled, the wrong supplier is used, or stock is not marked as requested. | `backend/app/feeds/customer/ordering/service.py` |
-| Send is wrongly disabled, or changing supplier loses an edit without warning. | `frontend/src/components/RestockPopup.tsx` |
+| Send is wrongly disabled, or changing supplier loses an edit without warning. | `frontend/app/(customer)/stocks/restock.tsx` |
 | Sending a restock order returns 500 and the log says 42702. | `database/migrations/0020_fix_create_order_ambiguous_reference.sql` |
 | Stock data is stale after a change. | `frontend/src/hooks/useStocks.ts` |
 | Stock was reduced twice, or half an upload was applied. | `backend/app/feeds/customer/uploads/applier.py` |
@@ -241,7 +241,7 @@ If a section has no file, that rule has no home and will be implemented inconsis
 | Section 6.2 | `backend/app/domain/seasonal.py`<br>`frontend/src/components/StockStatusChart.tsx`<br>`frontend/src/components/SeasonalCard.tsx` |
 | Section 6.3 and 6.6 | `frontend/app/(customer)/stocks/[id].tsx` |
 | Section 6.3 and 6.4 | `frontend/src/components/StockRow.tsx` |
-| Section 6.5 | `backend/app/domain/message_builder.py`<br>`backend/app/feeds/customer/ordering/routes.py`<br>`backend/app/feeds/customer/ordering/service.py`<br>`backend/app/feeds/customer/ordering/schemas.py`<br>`backend/tests/test_message_builder.py`<br>`frontend/src/api/ordering.ts`<br>`frontend/src/components/RestockPopup.tsx`<br>`frontend/src/components/ErrorBanner.tsx`<br>`frontend/src/stores/restockDraftStore.ts`<br>`frontend/src/lib/errors.ts`<br>`frontend/src/constants/channels.ts` |
+| Section 6.5 | `backend/app/domain/message_builder.py`<br>`backend/app/feeds/customer/ordering/routes.py`<br>`backend/app/feeds/customer/ordering/service.py`<br>`backend/app/feeds/customer/ordering/schemas.py`<br>`backend/tests/test_message_builder.py`<br>`frontend/src/api/ordering.ts`<br>`frontend/app/(customer)/stocks/restock.tsx`<br>`frontend/src/components/ErrorBanner.tsx`<br>`frontend/src/stores/restockDraftStore.ts`<br>`frontend/src/lib/errors.ts`<br>`frontend/src/constants/channels.ts` |
 | Section 6.6 and 5.10 | `backend/app/domain/stock.py` |
 | Section 6.6 | `backend/app/feeds/customer/uploads/routes.py`<br>`backend/app/feeds/customer/uploads/service.py`<br>`backend/app/feeds/customer/uploads/parser.py`<br>`backend/app/feeds/customer/uploads/applier.py`<br>`backend/app/feeds/customer/uploads/schemas.py`<br>`backend/tests/test_stock.py`<br>`backend/tests/test_uploads.py`<br>`frontend/app/(customer)/stocks/upload/index.tsx`<br>`frontend/app/(customer)/stocks/upload/mapping.tsx`<br>`frontend/app/(customer)/stocks/upload/unmatched.tsx`<br>`frontend/src/api/uploads.ts` |
 | Section 6.6 and 5.9 | `backend/app/feeds/customer/uploads/mapping.py` |

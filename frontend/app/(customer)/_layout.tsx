@@ -6,78 +6,55 @@
  * Look here when : A tab is missing or in the wrong order.
  */
 
-import { Tabs, router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../src/theme/colors';
-import { spacing } from '../../src/theme/spacing';
-import { text } from '../../src/theme/typography';
-import { useNotifications } from '../../src/hooks/useNotifications';
+import { TAB_ICON_SIZE, useTabScreenOptions } from '../../src/hooks/useTabScreenOptions';
 
-function HeaderButtons() {
-  const { unread } = useNotifications();
-  return (
-    <View style={styles.headerRight}>
-      <Pressable onPress={() => router.push('/notifications')} hitSlop={8} accessibilityLabel="Notifications">
-        <Ionicons name="notifications-outline" size={22} color={colors.brandInk} />
-        {unread > 0 ? <View style={styles.dot} /> : null}
-      </Pressable>
-      <Pressable onPress={() => router.push('/settings')} hitSlop={8} accessibilityLabel="Menu">
-        <Ionicons name="menu" size={24} color={colors.brandInk} />
-      </Pressable>
-    </View>
-  );
-}
+/** The restock flow: no tab bar to wander off into mid-order. Its stack draws the header. */
+const FOCUSED = {
+  href: null,
+  tabBarStyle: { display: 'none' as const },
+};
 
 export default function CustomerLayout() {
+  const screenOptions = useTabScreenOptions();
+
   return (
-    <Tabs
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.primary },
-        headerTintColor: colors.brandInk,
-        headerTitleStyle: { ...text.h2, color: colors.brandInk },
-        headerTitleAlign: 'center',
-        headerShadowVisible: false,
-        headerRight: () => <HeaderButtons />,
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textSubtle,
-        tabBarLabelStyle: text.caption,
-        tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border, height: 62, paddingBottom: 8, paddingTop: 6 },
-        sceneStyle: { backgroundColor: colors.background },
-      }}
-    >
+    <Tabs screenOptions={screenOptions}>
       <Tabs.Screen
         name="stocks/index"
         options={{
           title: 'Stocks',
-          tabBarIcon: ({ color, size }) => <Ionicons name="layers-outline" size={size} color={color as string} />,
+          tabBarIcon: ({ color }) => <Ionicons name="layers-outline" size={TAB_ICON_SIZE} color={color as string} />,
         }}
       />
       <Tabs.Screen
         name="reports/index"
         options={{
           title: 'Reports',
-          tabBarIcon: ({ color, size }) => <Ionicons name="analytics-outline" size={size} color={color as string} />,
+          tabBarIcon: ({ color }) => <Ionicons name="analytics-outline" size={TAB_ICON_SIZE} color={color as string} />,
         }}
       />
       <Tabs.Screen
         name="delivery/index"
         options={{
           title: 'Delivery',
-          tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" size={size} color={color as string} />,
+          tabBarIcon: ({ color }) => <Ionicons name="cube-outline" size={TAB_ICON_SIZE} color={color as string} />,
         }}
       />
       <Tabs.Screen
         name="suppliers/index"
         options={{
           title: 'Suppliers',
-          tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color as string} />,
+          tabBarIcon: ({ color }) => <Ionicons name="people-outline" size={TAB_ICON_SIZE} color={color as string} />,
         }}
       />
 
       {/* Reachable, but not tabs. */}
       <Tabs.Screen name="stocks/[id]" options={{ href: null, title: 'Product' }} />
       <Tabs.Screen name="stocks/add" options={{ href: null, title: 'Add product' }} />
+      {/* Its own stack, so back inside the flow behaves. See restock/_layout.tsx. */}
+      <Tabs.Screen name="restock" options={{ ...FOCUSED, headerShown: false }} />
       <Tabs.Screen name="stocks/upload/index" options={{ href: null, title: 'Upload sales report' }} />
       <Tabs.Screen name="stocks/upload/mapping" options={{ href: null, title: 'Match the columns' }} />
       <Tabs.Screen name="stocks/upload/unmatched" options={{ href: null, title: 'Unmatched products' }} />
@@ -88,16 +65,3 @@ export default function CustomerLayout() {
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, paddingRight: spacing.lg },
-  dot: {
-    position: 'absolute',
-    top: -1,
-    right: -1,
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: colors.danger,
-  },
-});

@@ -89,4 +89,11 @@ def _close(db, cutoff) -> None:
                       " closed automatically",
                       "Your stock has been topped up.", order_id=order["id"])
 
+        # The supplier's half of the same event. Confirming by hand tells them
+        # (delivery/service.py); closing on a timer used to tell nobody.
+        notify.notify(order["supplier_id"], "order_completed",
+                      f"{order['reference']} closed automatically",
+                      "The customer did not confirm in time, so it closed itself.",
+                      order_id=order["id"])
+
     log.info("auto_confirm: closed %d order(s)", len(rows))

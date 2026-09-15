@@ -24,7 +24,7 @@ import { currency, date, quantity } from '../../../src/lib/format';
 import { STAGE } from '../../../src/constants/stages';
 import { useCustomerOrder } from '../../../src/hooks/useOrders';
 import { useSubmit } from '../../../src/hooks/useSubmit';
-import { advanceStage, cancelOrder, confirmReceipt } from '../../../src/api/delivery';
+import { advanceStage, cancelOrder, confirmReceipt, rateSupplier } from '../../../src/api/delivery';
 import { PIPELINE } from '../../../src/types/orderStatus';
 
 export default function OrderDetail() {
@@ -115,6 +115,29 @@ export default function OrderDetail() {
           <Text style={[text.caption, styles.message]}>{o.message_body}</Text>
         </Card>
 
+        {/* Spec 12.3 — what you told them, kept visible so it is not given twice. */}
+        {o.rating ? (
+          <Card style={styles.gap}>
+            <Text style={text.title}>Your rating</Text>
+            <View style={styles.stars}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <Ionicons
+                  key={n}
+                  name={n <= o.rating!.quality_score ? 'star' : 'star-outline'}
+                  size={20}
+                  color={colors.warning}
+                />
+              ))}
+              <Text style={[text.label, styles.muted]}>
+                {o.rating.quality_score} out of 5
+              </Text>
+            </View>
+            {o.rating.comment ? (
+              <Text style={[text.caption, styles.muted]}>{o.rating.comment}</Text>
+            ) : null}
+          </Card>
+        ) : null}
+
         <Card style={styles.gap}>
           <Text style={text.title}>Supplier</Text>
           <Row icon="call-outline" value={o.counterparty_phone ?? '—'} />
@@ -181,7 +204,12 @@ export default function OrderDetail() {
         visible={rating}
         supplierName={o.counterparty_name}
         timesDismissed={dismissed}
-        onSubmit={() => setRating(false)}
+        onSubmit={async (score, comment) => {
+          setRating(false);
+          // Spec 12.3. The score used to be collected and thrown away.
+          const ok = await submit.run(() => rateSupplier(id, score, comment));
+          if (ok) order.refresh();
+        }}
         onDismiss={() => {
           setRating(false);
           setDismissed((d) => d + 1);
@@ -207,6 +235,7 @@ const styles = StyleSheet.create({
   headRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
   flex: { flex: 1 },
   muted: { color: colors.textMuted },
+  stars: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   itemRight: { alignItems: 'flex-end' },
   total: {

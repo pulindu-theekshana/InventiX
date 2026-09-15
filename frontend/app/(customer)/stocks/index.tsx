@@ -6,16 +6,15 @@
  * Look here when : The home screen renders wrongly.
  */
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StockStatusChart } from '../../../src/components/StockStatusChart';
 import { SeasonalCard } from '../../../src/components/SeasonalCard';
 import { StockRow } from '../../../src/components/StockRow';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { ErrorBanner } from '../../../src/components/ErrorBanner';
-import { RestockPopup } from '../../../src/components/RestockPopup';
 import { Input } from '../../../src/components/ui/Input';
 import { Card } from '../../../src/components/ui/Card';
 import { colors } from '../../../src/theme/colors';
@@ -23,6 +22,8 @@ import { elevation, radius, spacing } from '../../../src/theme/spacing';
 import { text } from '../../../src/theme/typography';
 import { useSeasonalWarnings, useStockSummary, useStocks } from '../../../src/hooks/useStocks';
 import { useSuppliers } from '../../../src/hooks/useSuppliers';
+import { useSubmit } from '../../../src/hooks/useSubmit';
+import { searchByProduct } from '../../../src/api/suppliers';
 import { generateMessage } from '../../../src/api/ordering';
 import { useMockData, MOCK_NOTICE } from '../../../src/api/client';
 import * as draftStore from '../../../src/stores/restockDraftStore';
@@ -33,10 +34,9 @@ export default function StocksHome() {
   const summary = useStockSummary();
   const seasonal = useSeasonalWarnings();
   const suppliers = useSuppliers('');
+  const submit = useSubmit();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<StockStatus | null>(null);
-  const [popupOpen, setPopupOpen] = useState(false);
-  const [generated, setGenerated] = useState('');
 
   const items = stocks.data ?? [];
 
@@ -67,23 +67,53 @@ export default function StocksHome() {
     return [...map.entries()].filter(([, list]) => list.length > 1);
   }, [low]);
 
+  /** The stock figures move once an order is sent, so refresh on the way back. */
+  useFocusEffect(
+    useCallback(() => {
+      if (!draftStore.getDraft()) {
+        stocks.refresh();
+        summary.refresh();
+      }
+    }, []),
+  );
+
   async function openRestock(chosen: StockItemView[], suggestedQuantity?: number) {
-    const supplierName = chosen[0]?.preferred_supplier_name ?? null;
-    const supplier = (suppliers.data ?? []).find((s) => s.business_name === supplierName) ?? null;
-    const lines = chosen.map((item) => ({
-      stock_item_id: item.id,
-      catalog_product_id: item.product.id,
-      name: item.product.name,
-      pack_size: item.product.pack_size,
-      quantity_requested: suggestedQuantity ?? Math.max(item.low_threshold * 2 - item.quantity_on_hand, 1),
-      quantity_available: supplier?.listing?.quantity_available ?? null,
-      min_order_quantity: supplier?.listing?.min_order_quantity ?? null,
-      unit_price: item.unit_price,
-    }));
-    const message = await generateMessage(lines, supplier);
-    setGenerated(message);
-    draftStore.openDraft(lines, supplier, message);
-    setPopupOpen(true);
+    await submit.run(async () => {
+      const supplierName = chosen[0]?.preferred_supplier_name ?? null;
+      let supplier = (suppliers.data ?? []).find((s) => s.business_name === supplierName) ?? null;
+
+      /**
+       * A product the shop has never ordered has no preferred supplier, and the message
+       * cannot be written without one -- the prices, the minimum and the availability all
+       * come from that supplier's listing. The backend returns whoever sells it, best
+       * ranked first (spec 9.1), which is the same choice the Suppliers feed would offer.
+       */
+      if (!supplier && chosen.length === 1) {
+        const ranked = await searchByProduct(chosen[0].product.id);
+        supplier = ranked[0] ?? null;
+      }
+      if (!supplier) {
+        throw new Error(
+          `No supplier on InventiX lists ${chosen[0]?.product.name ?? 'that product'} yet.`,
+        );
+      }
+
+      const lines = chosen.map((item) => ({
+        stock_item_id: item.id,
+        catalog_product_id: item.product.id,
+        name: item.product.name,
+        pack_size: item.product.pack_size,
+        quantity_requested:
+          suggestedQuantity ?? Math.max(item.low_threshold * 2 - item.quantity_on_hand, 1),
+        quantity_available: supplier.listing?.quantity_available ?? null,
+        min_order_quantity: supplier.listing?.min_order_quantity ?? null,
+        unit_price: item.unit_price ?? supplier.listing?.unit_price ?? null,
+      }));
+
+      const { message_body, warnings } = await generateMessage(lines, supplier);
+      draftStore.openDraft(lines, supplier, message_body, warnings);
+      router.push('/(customer)/restock' as never);
+    });
   }
 
   const loading = stocks.loading || summary.loading;
@@ -106,6 +136,7 @@ export default function StocksHome() {
       >
         {useMockData ? <ErrorBanner message={MOCK_NOTICE} tone="info" /> : null}
         <ErrorBanner message={stocks.error} />
+        <ErrorBanner message={submit.error} />
 
         {empty ? (
           <EmptyState
@@ -205,24 +236,6 @@ export default function StocksHome() {
         <Ionicons name="add" size={28} color={colors.onAccent} />
       </Pressable>
 
-      <RestockPopup
-        visible={popupOpen}
-        generatedMessage={generated}
-        onClose={() => {
-          setPopupOpen(false);
-          draftStore.closeDraft();
-        }}
-        onSent={(orderId) => {
-          setPopupOpen(false);
-          stocks.refresh();
-          summary.refresh();
-          router.push(`/(customer)/delivery/${orderId}`);
-        }}
-        onChangeSupplier={() => {
-          setPopupOpen(false);
-          router.push('/(customer)/suppliers?select=1');
-        }}
-      />
     </View>
   );
 }

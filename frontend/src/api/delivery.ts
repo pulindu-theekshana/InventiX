@@ -75,3 +75,20 @@ export async function advanceStage(id: string, status: OrderStatus): Promise<voi
     body: JSON.stringify({ status }),
   });
 }
+
+/**
+ * Spec 12.3 — the rating the shop leaves after confirming receipt. One per order. The
+ * backend refreshes the supplier's average immediately, so the new score is visible on the
+ * next screen rather than after the nightly job.
+ */
+export async function rateSupplier(
+  id: string,
+  qualityScore: number,
+  comment: string,
+): Promise<void> {
+  if (useMockData) return mock(undefined);
+  return request('/customer/delivery/' + id + '/rating', {
+    method: 'POST',
+    body: JSON.stringify({ quality_score: qualityScore, comment: comment || null }),
+  });
+}

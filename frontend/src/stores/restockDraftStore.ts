@@ -24,12 +24,21 @@ export function getDraft(): RestockDraft | null {
   return draft;
 }
 
-export function openDraft(lines: RestockLine[], supplier: SupplierView | null, message: string) {
+export function openDraft(
+  lines: RestockLine[],
+  supplier: SupplierView | null,
+  message: string,
+  warnings: string[] = [],
+  allowDuplicate = false,
+) {
   draft = {
     supplier,
     lines,
     message_body: message,
+    generated_message: message,
     message_edited: false,
+    warnings,
+    allow_duplicate: allowDuplicate,
     requested_delivery_date: null,
     notes: '',
   };
@@ -46,9 +55,13 @@ export function closeDraft() {
  * UI sets on every keystroke. If the customer edits and then types the original back, nothing
  * has actually been lost and they should not be warned.
  */
-export function editMessage(text: string, generated: string) {
+export function editMessage(text: string) {
   if (!draft) return;
-  draft = { ...draft, message_body: text, message_edited: text.trim() !== generated.trim() };
+  draft = {
+    ...draft,
+    message_body: text,
+    message_edited: text.trim() !== draft.generated_message.trim(),
+  };
   emit();
 }
 
@@ -85,6 +98,7 @@ export function changeSupplier(supplier: SupplierView, regenerated: string) {
     ...draft,
     supplier,
     message_body: regenerated,
+    generated_message: regenerated,
     message_edited: false,
     lines: draft.lines.map((l) => ({
       ...l,

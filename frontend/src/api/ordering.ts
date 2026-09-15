@@ -19,7 +19,7 @@ export async function generateMessage(
   lines: RestockLine[],
   supplier: SupplierView | null,
   shopName = 'Wasantha Kade',
-): Promise<string> {
+): Promise<{ message_body: string; warnings: string[]; duplicates: string[] }> {
   if (useMockData) {
     const to = supplier?.business_name ?? 'your supplier';
     const items = lines
@@ -36,14 +36,19 @@ export async function generateMessage(
       '',
       'Thank you!',
     ].join('\n');
-    return mock(body, 120);
+    return mock({ message_body: body, warnings: [], duplicates: [] }, 120);
   }
   /**
-   * The endpoint answers with the body and a list of problems (spec 6.5 -- a line the
-   * supplier cannot fill). Only the body is used here, because the popup does its own
-   * per-line check; surface `problems` too once that check moves to the backend.
+   * `problems` are the lines the backend would refuse; the popup does its own per-line
+   * check for those. `warnings` are the ones it will accept but the owner should see --
+   * today, a product already on order with a different supplier (spec 6.5).
    */
-  const result = await request<{ message_body: string; problems: string[] }>(
+  const result = await request<{
+    message_body: string;
+    problems: string[];
+    warnings: string[];
+    duplicates: string[];
+  }>(
     '/customer/ordering/message',
     {
       method: 'POST',
@@ -53,7 +58,12 @@ export async function generateMessage(
       }),
     },
   );
-  return result.message_body;
+  return {
+    message_body: result.message_body,
+    warnings: result.warnings ?? [],
+    /** Refused unless confirmed: the same product already on order with this supplier. */
+    duplicates: result.duplicates ?? [],
+  };
 }
 
 /**
@@ -75,6 +85,9 @@ export async function sendOrder(
       channel,
       message_body: draft.message_body,
       message_edited: draft.message_edited,
+      // The backend refuses a repeat order with the same supplier unless this says the
+      // owner was shown it and agreed.
+      allow_duplicate: draft.allow_duplicate,
       // An emptied date box holds '', which is not a date. Send nothing instead of ''.
       requested_delivery_date: draft.requested_delivery_date || null,
       notes: draft.notes,

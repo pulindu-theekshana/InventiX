@@ -18,12 +18,15 @@ import { ErrorBanner } from '../../../src/components/ErrorBanner';
 import { colors } from '../../../src/theme/colors';
 import { elevation, radius, spacing } from '../../../src/theme/spacing';
 import { text } from '../../../src/theme/typography';
-import { currency, quantity } from '../../../src/lib/format';
+import { currency, initials, quantity, rating } from '../../../src/lib/format';
 import { useAsync } from '../../../src/hooks/useAsync';
 import { listListings } from '../../../src/api/listings';
+import { getOverview } from '../../../src/api/overview';
 
 export default function Listings() {
   const listings = useAsync(() => listListings(), []);
+  /** Spec 10.1 — the supplier's own dashboard, the mirror of the shop's stock overview. */
+  const overview = useAsync(() => getOverview(), []);
   const [query, setQuery] = useState('');
 
   const all = listings.data ?? [];
@@ -38,6 +41,73 @@ export default function Listings() {
         refreshControl={<RefreshControl refreshing={listings.refreshing} onRefresh={listings.refresh} />}
       >
         <ErrorBanner message={listings.error} />
+
+        {overview.data ? (
+          <Card style={[styles.profile, elevation(1)]}>
+            <View style={styles.profileHead}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{initials(overview.data.business_name)}</Text>
+              </View>
+              <View style={styles.flex}>
+                <Text style={text.h2}>{overview.data.business_name}</Text>
+                <Text style={[text.caption, styles.muted]}>
+                  {overview.data.city ?? 'No city set'} · {overview.data.active_listings} products
+                </Text>
+              </View>
+              {overview.data.is_new_supplier ? <Badge label="New supplier" tone="info" /> : null}
+            </View>
+
+            <View style={styles.figures}>
+              <Figure
+                icon="star"
+                tint={colors.warning}
+                value={
+                  overview.data.average_rating === null
+                    ? '--'
+                    : rating(overview.data.average_rating)
+                }
+                caption={
+                  overview.data.rating_count === 1
+                    ? '1 rating'
+                    : overview.data.rating_count + ' ratings'
+                }
+              />
+              <Figure
+                icon="mail-unread"
+                tint={colors.accent}
+                value={String(overview.data.pending_orders)}
+                caption="awaiting reply"
+              />
+              <Figure
+                icon="checkmark-done"
+                tint={colors.success}
+                value={String(overview.data.completed_orders)}
+                caption="completed"
+              />
+            </View>
+
+            {overview.data.top_customers.length > 0 ? (
+              <View style={styles.customers}>
+                <Text style={[text.label, styles.muted]}>Your best customers</Text>
+                {overview.data.top_customers.map((c) => (
+                  <View key={c.name} style={styles.customerRow}>
+                    <Text style={[text.body, styles.flex]} numberOfLines={1}>
+                      {c.name}
+                    </Text>
+                    <Text style={[text.caption, styles.muted]}>
+                      {c.orders === 1 ? '1 order' : c.orders + ' orders'}
+                    </Text>
+                    <Text style={text.bodyStrong}>{currency(c.total_value)}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={[text.caption, styles.muted]}>
+                No completed orders yet. Your best customers will appear here.
+              </Text>
+            )}
+          </Card>
+        ) : null}
 
         {lowCount > 0 ? (
           <ErrorBanner
@@ -102,7 +172,44 @@ export default function Listings() {
   );
 }
 
+function Figure({
+  icon,
+  tint,
+  value,
+  caption,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  tint: string;
+  value: string;
+  caption: string;
+}) {
+  return (
+    <View style={styles.figure}>
+      <Ionicons name={icon} size={16} color={tint} />
+      <Text style={text.bodyStrong}>{value}</Text>
+      <Text style={[text.caption, styles.muted]} numberOfLines={1}>
+        {caption}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  profile: { gap: spacing.md },
+  profileHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { ...text.bodyStrong, color: colors.onAccent },
+  figures: { flexDirection: 'row', gap: spacing.md },
+  figure: { flex: 1, alignItems: 'center', gap: 2 },
+  customers: { gap: spacing.sm },
+  customerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   root: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxxl * 2 },
   search: { marginBottom: spacing.md },

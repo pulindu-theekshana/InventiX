@@ -6,13 +6,17 @@ Spec    : Section 8.1 and 8.3
 Look here when : An order sits in the wrong section, or confirming receipt does not top up stock.
 """
 
+import logging
 from datetime import UTC, datetime
 
-from ....core.exceptions import Forbidden, NotFound
+from ....core.exceptions import Conflict, Forbidden, NotFound, ValidationFailed
+from ....core.supabase import service_client
 from ....domain import order_labels, stock
 from ....domain import order_state_machine as sm
 from ...shared.notifications import service as notify
 from .schemas import OrderDetailOut, OrderItemOut, OrderSummaryOut, StageEventOut
+
+log = logging.getLogger(__name__)
 
 SELECT = (
     "id, reference, status, channel, requested_at, requested_delivery_date, "
@@ -140,6 +144,54 @@ def confirm_receipt(db, customer_id: str, order_id: str) -> None:
         "The customer has confirmed receipt.",
         order_id=order_id,
     )
+
+
+def rate(db, customer_id: str, customer_name: str, order_id: str,
+         score: int, comment: str | None) -> None:
+    """
+    Spec 12.3. The rating a shop leaves after confirming receipt.
+
+    Ratings are the whole basis of the supplier score (spec 12.1), so this also asks the
+    database to recompute the ranking. The scheduled job does that nightly, but a shop that
+    rates a supplier and immediately sees the same old average has no reason to believe the
+    rating was recorded at all.
+    """
+    row = _get_row(db, customer_id, order_id)
+
+    # The policy enforces this too; checking here names the reason.
+    if row["status"] != sm.PURCHASED:
+        raise ValidationFailed("You can rate a supplier once the order is complete.")
+
+    existing = (
+        db.table("supplier_ratings").select("id")
+        .eq("order_id", order_id).maybe_single().execute()
+    )
+    if existing and existing.data:
+        raise Conflict("You have already rated this order.")
+
+    db.table("supplier_ratings").insert({
+        "order_id": order_id,
+        "customer_id": customer_id,
+        "supplier_id": row["supplier_id"],
+        "quality_score": score,
+        "comment": comment or None,
+    }).execute()
+
+    # Both of these are after the rating is safely stored: neither is worth losing it for.
+    try:
+        service_client().rpc("recompute_supplier_ranking", {}).execute()
+    except Exception:
+        log.exception("could not refresh ranking after rating order %s", order_id)
+
+    try:
+        notify.notify(
+            row["supplier_id"], "rating_received",
+            f"{customer_name} rated {row['reference']} {score} out of 5",
+            comment or "No comment was left.",
+            order_id=order_id,
+        )
+    except Exception:
+        log.exception("could not notify supplier about rating on order %s", order_id)
 
 
 def cancel(db, customer_id: str, order_id: str) -> None:

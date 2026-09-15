@@ -8,13 +8,14 @@
 
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../../src/components/ui/Card';
 import { Input } from '../../../src/components/ui/Input';
 import { Button } from '../../../src/components/ui/Button';
 import { Badge } from '../../../src/components/ui/Badge';
 import { ErrorBanner } from '../../../src/components/ErrorBanner';
+import { Modal } from '../../../src/components/ui/Modal';
 import { colors } from '../../../src/theme/colors';
 import { radius, spacing } from '../../../src/theme/spacing';
 import { text } from '../../../src/theme/typography';
@@ -22,6 +23,10 @@ import { currency, date, quantity } from '../../../src/lib/format';
 import { useAdjustments, useStockItem } from '../../../src/hooks/useStocks';
 import { useSubmit } from '../../../src/hooks/useSubmit';
 import { adjustQuantity, updateThreshold } from '../../../src/api/stocks';
+import { generateMessage } from '../../../src/api/ordering';
+import { searchByProduct } from '../../../src/api/suppliers';
+import * as draftStore from '../../../src/stores/restockDraftStore';
+import type { RestockLine, SupplierView } from '../../../src/types/api';
 
 const REASONS = ['manual', 'damage', 'correction'] as const;
 
@@ -33,6 +38,8 @@ export default function StockDetail() {
   const [change, setChange] = useState('');
   const [reason, setReason] = useState<(typeof REASONS)[number]>('manual');
   const submit = useSubmit();
+  /** Held between asking "you already ordered this" and the owner answering. */
+  const [pending, setPending] = useState<{ line: RestockLine; supplier: SupplierView | null; message: string; warnings: string[]; duplicates: string[] } | null>(null);
 
   const data = item.data;
   if (item.loading) return <View style={styles.root} />;
@@ -46,11 +53,58 @@ export default function StockDetail() {
   }
 
   async function saveAdjustment() {
-    const ok = await submit.run(() => adjustQuantity(id, Number(change), reason));
+    // Damage always removes stock, so "6 damaged" and "-6 damaged" mean the same thing.
+    // Without this, typing 6 with damage selected adds six units.
+    const amount = reason === 'damage' ? -Math.abs(Number(change)) : Number(change);
+    const ok = await submit.run(() => adjustQuantity(id, amount, reason));
     if (!ok) return;
     setChange('');
     item.refresh();
     history.refresh();
+  }
+
+  /**
+   * Spec 6.5. Reorder starts here rather than on the list, because this is the screen an
+   * owner is on when they decide -- a low stock notification lands them here.
+   */
+  async function reorder() {
+    if (!data) return;
+    await submit.run(async () => {
+      const suppliers = await searchByProduct(data.product.id);
+      const supplier =
+        suppliers.find((s) => s.id === data.preferred_supplier_id) ?? suppliers[0] ?? null;
+
+      // Without one there is nobody to send to, and the backend would refuse the request
+      // with a less helpful message than this one.
+      if (!supplier) {
+        throw new Error(`No supplier on InventiX lists ${data.product.name} yet.`);
+      }
+
+      const line: RestockLine = {
+        stock_item_id: data.id,
+        catalog_product_id: data.product.id,
+        name: data.product.name,
+        pack_size: data.product.pack_size,
+        // Enough to clear the warning level with the same margin the list screen uses.
+        quantity_requested: Math.max(data.low_threshold * 2 - data.quantity_on_hand, 1),
+        quantity_available: supplier?.listing?.quantity_available ?? null,
+        min_order_quantity: supplier?.listing?.min_order_quantity ?? null,
+        unit_price: data.unit_price,
+      };
+
+      const { message_body, warnings, duplicates } = await generateMessage([line], supplier);
+      const next = { line, supplier, message: message_body, warnings, duplicates };
+
+      // Already on order with this same supplier: ask before writing a second one.
+      if (duplicates.length > 0) setPending(next);
+      else openMessage(next);
+    });
+  }
+
+  function openMessage(p: NonNullable<typeof pending>, confirmed = false) {
+    setPending(null);
+    draftStore.openDraft([p.line], p.supplier, p.message, [...p.warnings, ...p.duplicates], confirmed);
+    router.push('/(customer)/restock' as never);
   }
 
   return (
@@ -94,8 +148,9 @@ export default function StockDetail() {
       <Card style={styles.gap}>
         <Text style={text.title}>Record an adjustment</Text>
         <Text style={[text.caption, styles.muted]}>
-          For damage, spoilage or a miscount. Use a negative number to reduce. Every change
-          writes an audit row, so a wrong figure can always be traced.
+          For damage, spoilage or a miscount. Use a negative number to reduce -- with Damage
+          selected, just enter how many were damaged. Every change writes an audit row, so a
+          wrong figure can always be traced.
         </Text>
         <Input
           value={change}
@@ -123,6 +178,44 @@ export default function StockDetail() {
           onPress={saveAdjustment}
         />
       </Card>
+
+      <Card style={styles.gap}>
+        <Text style={text.title}>Running low?</Text>
+        <Text style={[text.caption, styles.muted]}>
+          Sends a restock request to {data.preferred_supplier_name ?? 'a supplier who sells it'},
+          with a message you can read and edit first.
+        </Text>
+        <Button
+          label="Reorder this product"
+          variant="send"
+          icon="cart-outline"
+          loading={submit.busy}
+          onPress={reorder}
+        />
+      </Card>
+
+      <Modal
+        visible={pending !== null}
+        onClose={() => setPending(null)}
+        title="Already on order"
+        variant="dialog"
+        footer={
+          <View style={styles.reasons}>
+            <Button label="Cancel" variant="outline" onPress={() => setPending(null)} />
+            <Button
+              label="Reorder anyway"
+              variant="accent"
+              onPress={() => pending && openMessage(pending, true)}
+            />
+          </View>
+        }
+      >
+        <Text style={text.body}>{pending?.duplicates.join(' ')}</Text>
+        <Text style={[text.caption, styles.muted]}>
+          Both deliveries would arrive, and your stock would go up twice. Reorder only if you
+          really need more.
+        </Text>
+      </Modal>
 
       <Card style={styles.gap}>
         <Text style={text.title}>History</Text>

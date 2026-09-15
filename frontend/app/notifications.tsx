@@ -17,12 +17,23 @@ import { radius, spacing } from '../src/theme/spacing';
 import { text } from '../src/theme/typography';
 import { relative } from '../src/lib/format';
 import { routeFor, useNotifications } from '../src/hooks/useNotifications';
+import { useAuth } from '../src/hooks/useAuth';
 import { markRead } from '../src/api/notifications';
 
+/** Every type backend/app/feeds and backend/app/jobs can send. Spec 13. */
 const ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   low_stock: 'trending-down',
+  order_received: 'cart',
+  rating_received: 'star',
   supplier_delivered: 'cube',
   order_rejected: 'close-circle',
+  order_cancelled: 'close-circle',
+  order_confirmed: 'checkmark-circle',
+  order_auto_confirmed: 'checkmark-circle',
+  order_completed: 'checkmark-done-circle',
+  order_ageing: 'hourglass',
+  order_unanswered: 'help-circle',
+  auto_confirm_warning: 'alert-circle',
   stage_change: 'swap-horizontal',
   seasonal: 'sparkles',
   stale_stock: 'time',
@@ -30,8 +41,17 @@ const ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
 
 const TINT: Record<string, string> = {
   low_stock: colors.warning,
+  order_received: colors.accent,
+  rating_received: colors.warning,
   supplier_delivered: colors.info,
   order_rejected: colors.danger,
+  order_cancelled: colors.danger,
+  order_confirmed: colors.success,
+  order_auto_confirmed: colors.success,
+  order_completed: colors.success,
+  order_ageing: colors.warning,
+  order_unanswered: colors.warning,
+  auto_confirm_warning: colors.warning,
   stage_change: colors.info,
   seasonal: colors.accent,
   stale_stock: colors.textSubtle,
@@ -39,7 +59,22 @@ const TINT: Record<string, string> = {
 
 export default function Notifications() {
   const notifications = useNotifications();
+  const { role } = useAuth();
   const list = notifications.data ?? [];
+
+  /**
+   * Marking read must never stop the tap from opening the screen: the notification is a way in,
+   * and failing to record that it was read is not worth blocking the user for.
+   */
+  async function open(n: (typeof list)[number]) {
+    try {
+      await markRead(n.id);
+      notifications.refresh();
+    } catch {
+      /* the unread dot stays; the screen still opens */
+    }
+    router.push(routeFor(n, role) as never);
+  }
 
   return (
     <ScrollView
@@ -61,11 +96,7 @@ export default function Notifications() {
           <Card
             key={n.id}
             style={[styles.card, n.read_at === null && styles.unread]}
-            onPress={async () => {
-              await markRead(n.id);
-              notifications.refresh();
-              router.push(routeFor(n) as never);
-            }}
+            onPress={() => open(n)}
           >
             <View style={[styles.iconRing, { backgroundColor: (TINT[n.type] ?? colors.accent) + '22' }]}>
               <Ionicons

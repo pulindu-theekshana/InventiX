@@ -10,7 +10,7 @@ from fastapi import APIRouter, status
 
 from ....dependencies import CustomerDep
 from . import service
-from .schemas import AdvanceStageIn, OrderDetailOut, OrderSummaryOut
+from .schemas import AdvanceStageIn, OrderDetailOut, OrderSummaryOut, RateSupplierIn
 
 router = APIRouter(prefix="/customer/delivery", tags=["customer: delivery"])
 
@@ -32,6 +32,12 @@ async def get_order(order_id: str, user: CustomerDep) -> OrderDetailOut:
 @router.post("/{order_id}/confirm-receipt", status_code=status.HTTP_204_NO_CONTENT)
 async def confirm_receipt(order_id: str, user: CustomerDep) -> None:
     service.confirm_receipt(user.db, user.id, order_id)
+
+
+@router.post("/{order_id}/rating", status_code=status.HTTP_204_NO_CONTENT)
+async def rate_supplier(order_id: str, body: RateSupplierIn, user: CustomerDep) -> None:
+    """Spec 12.3. One per order, and only once the order is complete."""
+    service.rate(user.db, user.id, user.business_name, order_id, body.quality_score, body.comment)
 
 
 @router.post("/{order_id}/cancel", status_code=status.HTTP_204_NO_CONTENT)
