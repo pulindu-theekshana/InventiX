@@ -101,6 +101,30 @@ export async function signUp(email: string, password: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Changes the signed-in user's password. No backend involved: spec 3.1 keeps raw passwords
+ * out of FastAPI entirely, so this goes straight to Supabase Auth like sign-in does.
+ *
+ * The current password is checked first, by signing in with it. Supabase updates a password
+ * from the session alone, which would let anyone holding an unlocked phone change it and lock
+ * the owner out. Re-authenticating is the only way to know the person typing is the owner.
+ * A failed sign-in does not disturb the session that is already open.
+ */
+export async function changePassword(current: string, next: string): Promise<void> {
+  if (!supabase) throw new Error('Supabase is not configured. Use Explore the app instead.');
+  const { profile } = getState();
+  if (!profile) throw new Error('You need to be signed in to change your password.');
+
+  const { error: wrong } = await supabase.auth.signInWithPassword({
+    email: profile.email,
+    password: current,
+  });
+  if (wrong) throw new Error('That is not your current password.');
+
+  const { error } = await supabase.auth.updateUser({ password: next });
+  if (error) throw error;
+}
+
 export function setPendingRole(role: Role | null): void {
   set({ pendingRole: role });
 }
