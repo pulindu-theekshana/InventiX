@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Link, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Input } from '../../src/components/ui/Input';
 import { Button } from '../../src/components/ui/Button';
 import { ErrorBanner } from '../../src/components/ErrorBanner';
@@ -22,6 +23,7 @@ import { useAuth } from '../../src/hooks/useAuth';
 
 export default function Login() {
   const { demo } = useAuth();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -42,7 +44,15 @@ export default function Login() {
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      {/* Login draws its own brand instead of a header, so nothing above it reserves the
+          status bar or the home indicator. It has to inset itself. */}
+      <ScrollView
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingTop: spacing.lg + insets.top, paddingBottom: spacing.lg + insets.bottom },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.brand}>
           <Image source={require('../../assets/icon.png')} style={styles.logo} />
           <Text style={[text.h1, styles.brandName]}>InventiX</Text>
