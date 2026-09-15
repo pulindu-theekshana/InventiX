@@ -28,6 +28,14 @@ class GenerateMessageOut(BaseModel):
     # second request. Spec 6.5 wants availability under every quantity field.
     problems: list[str] = []
 
+    # Said out loud but not refused: the same product already on order with a
+    # different supplier. Spec 6.5.
+    warnings: list[str] = []
+
+    # Refused unless the owner confirms: the same product already on order with
+    # THIS supplier. The app turns each of these into a confirmation.
+    duplicates: list[str] = []
+
 
 class SendOrderIn(BaseModel):
     supplier_id: str
@@ -37,6 +45,10 @@ class SendOrderIn(BaseModel):
     requested_delivery_date: date | None = None
     notes: str | None = None
     lines: list[OrderLineIn] = Field(min_length=1)
+
+    # Set only after the owner has been shown the duplicate and said yes. Default
+    # false, so a repeated order is never created by accident or by a stale screen.
+    allow_duplicate: bool = False
 
 
 class SendOrderOut(BaseModel):

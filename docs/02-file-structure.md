@@ -235,7 +235,6 @@ frontend/
 |   |   |-- ErrorBanner.tsx
 |   |   |-- OrderCard.tsx
 |   |   |-- RatingPrompt.tsx
-|   |   |-- RestockPopup.tsx
 |   |   |-- SeasonalCard.tsx
 |   |   |-- StageProgress.tsx
 |   |   |-- StockRow.tsx

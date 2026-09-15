@@ -1,14 +1,15 @@
 /**
  * Suppliers feed
  * 
- * Purpose : Browse mode from the tab bar, selection mode from the restock popup. The Company and Product tabs are the two search types spec 9.1 defines. Order comes from the backend ranking, never from the app.
+ * Purpose : Browsing suppliers from the tab bar. The Company and Product tabs are the two search types spec 9.1 defines. Order comes from the backend ranking, never from the app.
+ * Choosing one for a restock is a separate screen, stocks/choose-supplier.tsx.
  * Spec    : Section 9.1 and 9.3
  * Look here when : Suppliers are ordered wrongly or selection mode misbehaves.
  */
 
 import { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SupplierRow } from '../../../src/components/SupplierRow';
 import { EmptyState } from '../../../src/components/EmptyState';
@@ -23,9 +24,7 @@ import { useSuppliers } from '../../../src/hooks/useSuppliers';
 type Mode = 'company' | 'product';
 
 export default function SuppliersFeed() {
-  const { select } = useLocalSearchParams<{ select?: string }>();
-  const selectionMode = select === '1';
-  const [mode, setMode] = useState<Mode>(selectionMode ? 'product' : 'company');
+  const [mode, setMode] = useState<Mode>('company');
   const [query, setQuery] = useState('');
   const suppliers = useSuppliers(query);
 
@@ -33,15 +32,6 @@ export default function SuppliersFeed() {
 
   return (
     <View style={styles.root}>
-      {selectionMode ? (
-        <Card style={styles.banner}>
-          <Ionicons name="information-circle" size={18} color={colors.info} />
-          <Text style={[text.label, styles.flex]}>
-            Choose a supplier for this order. The message is rewritten for whoever you pick.
-          </Text>
-        </Card>
-      ) : null}
-
       <View style={styles.tabs}>
         <Pressable onPress={() => setMode('company')} style={[styles.tab, mode === 'company' && styles.tabActive]}>
           <Text style={[text.bodyStrong, { color: mode === 'company' ? colors.accent : colors.textMuted }]}>
@@ -69,6 +59,7 @@ export default function SuppliersFeed() {
         ) : null}
       </View>
 
+
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={suppliers.refreshing} onRefresh={suppliers.refresh} />}
@@ -86,12 +77,7 @@ export default function SuppliersFeed() {
               key={s.id}
               supplier={s}
               rank={mode === 'product' ? i + 1 : undefined}
-              selectionMode={selectionMode}
-              onPress={() =>
-                selectionMode
-                  ? router.back()
-                  : router.push(`/(customer)/suppliers/${s.id}`)
-              }
+              onPress={() => router.push(`/(customer)/suppliers/${s.id}`)}
             />
           ))
         )}
@@ -122,6 +108,7 @@ const styles = StyleSheet.create({
   },
   tabActive: { borderBottomColor: colors.accent },
   searchWrap: { padding: spacing.lg, paddingBottom: spacing.sm, gap: spacing.xs },
+  orderHint: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
   hint: { color: colors.textSubtle },
   scroll: { padding: spacing.lg, paddingTop: spacing.sm },
 });

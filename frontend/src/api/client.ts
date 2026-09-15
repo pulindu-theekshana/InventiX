@@ -54,8 +54,23 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
     let code: string | undefined;
     try {
       const body = await response.json();
-      message = body.detail ?? body.message ?? '';
       code = body.code;
+      /**
+       * Our own errors send `detail` as a sentence. FastAPI's request validation sends it as
+       * a list of objects instead, and reading that as a string printed "[object Object]" --
+       * which told the shop owner nothing and told us even less.
+       */
+      if (Array.isArray(body.detail)) {
+        message = body.detail
+          .map((d: { loc?: (string | number)[]; msg?: string }) =>
+            [d.loc?.filter((p) => p !== 'body').join('.'), d.msg].filter(Boolean).join(': '),
+          )
+          .join(' ');
+      } else if (typeof body.detail === 'string') {
+        message = body.detail;
+      } else {
+        message = body.message ?? (body.detail ? JSON.stringify(body.detail) : '');
+      }
     } catch {
       /* body was not JSON; fall back to the status message */
     }

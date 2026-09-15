@@ -20,6 +20,7 @@ from .feeds.shared.notifications import routes as shared_notifications
 from .feeds.supplier.delivery import routes as supplier_delivery
 from .feeds.supplier.listings import routes as supplier_listings
 from .feeds.supplier.orders import routes as supplier_orders
+from .feeds.supplier.overview import routes as supplier_overview
 
 api_router = APIRouter()
 
@@ -37,6 +38,7 @@ api_router.include_router(customer_uploads.router)
 api_router.include_router(customer_reports.router)
 
 # Supplier feeds, spec 10.
+api_router.include_router(supplier_overview.router)
 api_router.include_router(supplier_listings.router)
 api_router.include_router(supplier_orders.router)
 api_router.include_router(supplier_delivery.router)

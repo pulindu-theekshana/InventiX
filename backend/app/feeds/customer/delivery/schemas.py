@@ -6,7 +6,7 @@ Spec    : Section 8.2
 Look here when : An order card shows a missing or wrong field.
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class OrderItemOut(BaseModel):
@@ -52,6 +52,16 @@ class OrderDetailOut(OrderSummaryOut):
     counterparty_phone: str | None = None
     counterparty_address: str | None = None
     rating: dict | None = None
+
+
+class RateSupplierIn(BaseModel):
+    """
+    Spec 12.3. One rating per order, given after receipt is confirmed. The comment is
+    optional: a shop that wants to give four stars and move on should be able to.
+    """
+
+    quality_score: int = Field(ge=1, le=5)
+    comment: str | None = Field(default=None, max_length=1000)
 
 
 class AdvanceStageIn(BaseModel):

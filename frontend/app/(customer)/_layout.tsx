@@ -10,6 +10,12 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { TAB_ICON_SIZE, useTabScreenOptions } from '../../src/hooks/useTabScreenOptions';
 
+/** The restock flow: no tab bar to wander off into mid-order. Its stack draws the header. */
+const FOCUSED = {
+  href: null,
+  tabBarStyle: { display: 'none' as const },
+};
+
 export default function CustomerLayout() {
   const screenOptions = useTabScreenOptions();
 
@@ -47,6 +53,8 @@ export default function CustomerLayout() {
       {/* Reachable, but not tabs. */}
       <Tabs.Screen name="stocks/[id]" options={{ href: null, title: 'Product' }} />
       <Tabs.Screen name="stocks/add" options={{ href: null, title: 'Add product' }} />
+      {/* Its own stack, so back inside the flow behaves. See restock/_layout.tsx. */}
+      <Tabs.Screen name="restock" options={{ ...FOCUSED, headerShown: false }} />
       <Tabs.Screen name="stocks/upload/index" options={{ href: null, title: 'Upload sales report' }} />
       <Tabs.Screen name="stocks/upload/mapping" options={{ href: null, title: 'Match the columns' }} />
       <Tabs.Screen name="stocks/upload/unmatched" options={{ href: null, title: 'Unmatched products' }} />
