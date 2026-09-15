@@ -28,3 +28,15 @@ def product_summary(items: list[dict]) -> str | None:
     if len(names) == 1:
         return names[0]
     return f"{names[0]} +{len(names) - 1} more"
+
+
+def titled(reference: str, items: list[dict]) -> str:
+    """
+    "DEL-0006 - Papadam", for the first line of a notification.
+
+    A notification arrives with no screen around it, so the reference alone is the
+    least useful thing it could say. Falls back to the reference when the order has
+    no lines, rather than leaving a separator hanging.
+    """
+    summary = product_summary(items)
+    return f"{reference} - {summary}" if summary else reference

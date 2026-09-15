@@ -10,13 +10,13 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from ..core.supabase import service_client
-from ..domain import config_store, stock
+from ..domain import config_store, order_labels, stock
 from ..feeds.shared.notifications import service as notify
 
 log = logging.getLogger(__name__)
 
 SELECT = ("id, reference, customer_id, supplier_id, supplier_marked_delivered_at, "
-          "order_items(stock_item_id, quantity_requested)")
+          "order_items(stock_item_id, quantity_requested, product_catalog!inner(name))")
 
 
 def run() -> None:
@@ -36,7 +36,8 @@ def run() -> None:
 
 def _warn(db, cutoff) -> None:
     rows = (
-        db.table("orders").select("id, reference, customer_id")
+        db.table("orders")
+        .select("id, reference, customer_id, order_items(product_catalog!inner(name))")
         .eq("status", "on_the_way")
         .not_.is_("supplier_marked_delivered_at", "null")
         .lt("supplier_marked_delivered_at", cutoff.isoformat())
@@ -46,7 +47,8 @@ def _warn(db, cutoff) -> None:
     for order in rows:
         notify.notify(
             order["customer_id"], "auto_confirm_warning",
-            f"{order['reference']} will close tomorrow",
+            f"{order_labels.titled(order['reference'], order.get('order_items') or [])}"
+            " will close tomorrow",
             "Confirm receipt now if anything was wrong with this delivery.",
             order_id=order["id"],
         )
@@ -83,7 +85,8 @@ def _close(db, cutoff) -> None:
         }).eq("id", order["id"]).execute()
 
         notify.notify(order["customer_id"], "order_auto_confirmed",
-                      f"{order['reference']} closed automatically",
+                      f"{order_labels.titled(order['reference'], order.get('order_items') or [])}"
+                      " closed automatically",
                       "Your stock has been topped up.", order_id=order["id"])
 
     log.info("auto_confirm: closed %d order(s)", len(rows))

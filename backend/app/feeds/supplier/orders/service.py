@@ -188,7 +188,7 @@ def confirm(db, supplier_id: str, order_id: str) -> None:
     }).eq("id", order_id).execute()
 
     notify.notify(row["customer_id"], "order_confirmed",
-                  f"{row['reference']} was accepted",
+                  f"{order_labels.titled(row['reference'], items)} was accepted",
                   "Your supplier has confirmed this order.", order_id=order_id)
 
 
@@ -208,4 +208,6 @@ def reject(db, supplier_id: str, order_id: str, reason: str) -> None:
     }).eq("id", order_id).execute()
 
     notify.notify(row["customer_id"], "order_rejected",
-                  f"{row['reference']} was declined", reason, order_id=order_id)
+                  f"{order_labels.titled(row['reference'], row.get('order_items') or [])}"
+                  " was declined",
+                  reason, order_id=order_id)

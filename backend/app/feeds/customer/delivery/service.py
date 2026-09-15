@@ -136,7 +136,7 @@ def confirm_receipt(db, customer_id: str, order_id: str) -> None:
 
     notify.notify(
         row["supplier_id"], "order_completed",
-        f"{row['reference']} is complete",
+        f"{order_labels.titled(row['reference'], row.get('order_items') or [])} is complete",
         "The customer has confirmed receipt.",
         order_id=order_id,
     )
@@ -157,7 +157,8 @@ def cancel(db, customer_id: str, order_id: str) -> None:
 
     _set_status(db, order_id, sm.CANCELLED)
     notify.notify(row["supplier_id"], "order_cancelled",
-                  f"{row['reference']} was cancelled",
+                  f"{order_labels.titled(row['reference'], row.get('order_items') or [])}"
+                  " was cancelled",
                   "The customer withdrew this order.", order_id=order_id)
 
 

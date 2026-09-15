@@ -52,9 +52,12 @@ const CUSTOMER: Topic[] = [
     icon: 'star-outline',
     title: 'What the score means',
     body: [
-      'Quality is 40 percent of it, delivery speed 30, how much they can supply 20, and price 10.',
+      'The stars and the score are two different things. Stars are the plain average of what shop owners gave them, out of 5. The score out of 100 is the composite, and the stars are only part of it.',
+      'Quality is 40 percent of the score, delivery speed 30, how much they can supply 20, and price 10.',
       'Delivery speed is measured from orders that actually completed, not from what the supplier claims. A supplier cannot improve it by promising.',
-      'Quality comes only from shop owners rating them, which is why the app asks you after a delivery.',
+      'Quality comes only from shop owners rating them, which is why the app asks you after a delivery. Price is judged against other suppliers of the same product, so it only means anything in a comparison.',
+      'Quality is also weighted by how many ratings there are. With one or two, the average is pulled toward the middle, because two opinions are not evidence — which is why a five-star supplier with a single rating does not immediately outrank everyone.',
+      'Anyone with fewer than three completed orders is marked New supplier, and their score is provisional rather than earned.',
     ],
   },
   {
@@ -155,8 +158,10 @@ const SUPPLIER: Topic[] = [
     icon: 'trophy-outline',
     title: 'How your ranking is built',
     body: [
-      'Quality is 40 percent, delivery speed 30, the quantity you can supply 20, and price 10.',
-      'Quality comes from shop owners rating your deliveries. Speed is measured from orders that completed, so it rewards what you did rather than what you promised.',
+      'Shop owners see two numbers against you. The stars are the plain average of their ratings, out of 5. The score out of 100 is the composite that decides where you appear in a search.',
+      'Quality is 40 percent of the score, delivery speed 30, the quantity you can supply 20, and price 10. Price is judged against other suppliers of the same product, not in the abstract.',
+      'Quality comes from shop owners rating your deliveries. Speed is measured from orders that completed, so it rewards what you did rather than what you promised — marking an order delivered does not stop that clock, only the customer confirming receipt does.',
+      'Quality is weighted by how many ratings you have. Early on, one excellent rating moves you less than you would expect, because the average is pulled toward the middle until there is enough of it to trust. The fix is volume, not chasing a single review.',
       'Until three orders have completed you are shown as a new supplier and the score is provisional.',
     ],
   },
