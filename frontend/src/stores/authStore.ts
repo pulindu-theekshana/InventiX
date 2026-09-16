@@ -158,6 +158,12 @@ export async function changePassword(current: string, next: string): Promise<voi
   if (error) throw error;
 }
 
+/** After profile-setup writes the row. Without it the app is signed in to the backend but not to itself until relaunch. */
+export function completeProfile(profile: AuthProfile): void {
+  // pendingRole is left set: clearing it would bounce profile-setup to choose-role before it navigates away. signOut clears it.
+  set({ status: 'signedIn', profile });
+}
+
 export function setPendingRole(role: Role | null): void {
   set({ pendingRole: role });
 }
