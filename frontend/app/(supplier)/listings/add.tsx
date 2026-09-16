@@ -22,6 +22,7 @@ import { useAsync } from '../../../src/hooks/useAsync';
 import { useSubmit } from '../../../src/hooks/useSubmit';
 import { searchCatalog } from '../../../src/api/catalog';
 import { createListing } from '../../../src/api/listings';
+import { Chip } from '../../../src/components/ui/Chip';
 import type { CatalogProduct } from '../../../src/types/database';
 
 /** Stands for every category at once, and is never a real one. */
@@ -194,29 +195,6 @@ export default function AddProduct() {
   );
 }
 
-function Chip({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      style={[styles.chip, selected ? styles.chipOn : styles.chipOff]}
-    >
-      <Text style={[text.caption, { color: selected ? colors.onAccent : colors.textMuted }]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 /** The chosen product's category. Read only, because the catalog owns it. */
 function Tag({ label }: { label: string }) {
   return (
@@ -236,9 +214,6 @@ const styles = StyleSheet.create({
   hint: { color: colors.textSubtle },
   chosenMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: { paddingVertical: spacing.xs, paddingHorizontal: spacing.md, borderRadius: radius.pill },
-  chipOn: { backgroundColor: colors.accent },
-  chipOff: { backgroundColor: colors.surfaceMuted },
   tag: {
     backgroundColor: colors.primaryTint,
     paddingVertical: 3,

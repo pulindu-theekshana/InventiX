@@ -1,7 +1,7 @@
 /**
  * Add product
  * 
- * Purpose : Search the shared catalog, pick a product, set the starting quantity and the low threshold. Spec 5.2 is why this is a search and not a text field: both sides must point at the same catalog row or nothing can ever be matched.
+ * Purpose : Search the shared catalog, pick a product, set the starting quantity and the low threshold. Spec 5.2 is why this is a search first: both sides must point at the same catalog row or nothing can ever be matched. A product nobody has entered yet can be added to the catalog from here.
  * Spec    : Section 6.7
  * Look here when : Adding a product fails.
  */
@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../../src/components/ui/Card';
 import { Input } from '../../../src/components/ui/Input';
 import { Button } from '../../../src/components/ui/Button';
+import { Chip } from '../../../src/components/ui/Chip';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { ErrorBanner } from '../../../src/components/ErrorBanner';
 import { colors } from '../../../src/theme/colors';
@@ -20,7 +21,7 @@ import { radius, spacing } from '../../../src/theme/spacing';
 import { text } from '../../../src/theme/typography';
 import { useAsync } from '../../../src/hooks/useAsync';
 import { useSubmit } from '../../../src/hooks/useSubmit';
-import { searchCatalog } from '../../../src/api/catalog';
+import { createCatalogProduct, listCategories, searchCatalog } from '../../../src/api/catalog';
 import { addStockItem } from '../../../src/api/stocks';
 import type { CatalogProduct } from '../../../src/types/database';
 
@@ -30,6 +31,11 @@ export default function AddProduct() {
   const [quantity, setQuantity] = useState('');
   const [threshold, setThreshold] = useState('');
   const submit = useSubmit();
+  const [creating, setCreating] = useState(false);
+  const [packSize, setPackSize] = useState('');
+  const [category, setCategory] = useState('');
+  const create = useSubmit();
+  const categories = useAsync(listCategories, []);
   const results = useAsync(() => searchCatalog(query), [query]);
 
   /**
@@ -50,6 +56,46 @@ export default function AddProduct() {
     );
     // Only leave the screen on success; a refusal must stay visible with the form intact.
     if (ok) router.back();
+  }
+
+  /** The new row then goes through the same quantity and threshold step as any other product. */
+  async function saveNew() {
+    const ok = await create.run(async () =>
+      setChosen(await createCatalogProduct({ name: query.trim(), pack_size: packSize.trim(), category: category.trim() })),
+    );
+    if (ok) setCreating(false);
+  }
+
+  if (creating) {
+    return (
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <Card style={styles.gap}>
+          <Text style={text.h2}>New product</Text>
+          <Text style={[text.caption, styles.muted]}>
+            Every shop and supplier shares this list, so name it the way it is printed on the pack.
+          </Text>
+          <Input label="Product name" value={query} onChangeText={setQuery} placeholder="Munchee Cream Crackers" icon="pricetag-outline" />
+          <Input label="Pack size" value={packSize} onChangeText={setPackSize} placeholder="490 g" icon="resize-outline" />
+          <Text style={[text.label, styles.muted]}>Category</Text>
+          <View style={styles.chips}>
+            {(categories.data ?? []).map((c) => (
+              <Chip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} />
+            ))}
+          </View>
+          <ErrorBanner message={create.error} />
+          <Button
+            label="Continue"
+            variant="accent"
+            size="lg"
+            loading={create.busy}
+            disabled={query.trim().length < 2 || !packSize.trim() || !category}
+            onPress={saveNew}
+            fullWidth
+          />
+          <Button label="Back to search" variant="ghost" onPress={() => setCreating(false)} fullWidth />
+        </Card>
+      </ScrollView>
+    );
   }
 
   if (chosen) {
@@ -135,11 +181,14 @@ export default function AddProduct() {
           <EmptyState
             icon="search-outline"
             title="Nothing matches that"
-            message="Products come from a shared catalog so shops and suppliers always mean the same thing. If yours is missing, request it and it will be reviewed."
-            actionLabel="Request this product"
-            onAction={() => {}}
+            message="Products come from a shared catalog so shops and suppliers always mean the same thing. If yours is missing, add it."
+            actionLabel="Add a new product"
+            onAction={() => setCreating(true)}
           />
-        ) : null}
+        ) : (
+          // Also offered under a partial match: searching "rice" can list rices that are not yours.
+          <Button label="Can't find it? Add a new product" variant="ghost" onPress={() => setCreating(true)} fullWidth />
+        )}
       </ScrollView>
     </View>
   );
@@ -154,6 +203,7 @@ const styles = StyleSheet.create({
   muted: { color: colors.textMuted },
   chosen: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   flex: { flex: 1 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   result: { marginBottom: spacing.sm, borderRadius: radius.md },
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
 });

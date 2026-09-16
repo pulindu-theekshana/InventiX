@@ -31,3 +31,25 @@ export async function searchCatalog(query: string): Promise<CatalogProduct[]> {
   }
   return request(`/catalog/search?q=${encodeURIComponent(query)}`);
 }
+
+/**
+ * For a product nobody has entered yet. The backend hands back the existing row if another
+ * shop already added the same name and pack size, so the catalog stays one row per product.
+ */
+export async function createCatalogProduct(input: {
+  name: string;
+  pack_size: string;
+  category: string;
+  unit?: string;
+}): Promise<CatalogProduct> {
+  if (useMockData) {
+    return mock({ id: 'p-' + Date.now(), unit: 'packet', barcode: null, is_seasonal: false, is_active: true, ...input });
+  }
+  return request('/catalog', { method: 'POST', body: JSON.stringify(input) });
+}
+
+/** The categories a new product may use. Seasonal warnings match on these exact strings. */
+export async function listCategories(): Promise<string[]> {
+  if (useMockData) return mock(Array.from(new Set(CATALOG.map((p) => p.category))).sort());
+  return request('/catalog/categories');
+}
