@@ -16,6 +16,6 @@ router = APIRouter(prefix="/supplier/overview", tags=["supplier: overview"])
 
 
 @router.get("", response_model=OverviewOut)
-async def get_overview(user: SupplierDep) -> OverviewOut:
+def get_overview(user: SupplierDep) -> OverviewOut:
     """Their own figures only: the dependency decides whose, never the request."""
     return service.overview(user.db, user.id)

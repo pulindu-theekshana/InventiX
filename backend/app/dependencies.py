@@ -46,7 +46,7 @@ def _bearer(authorization: str | None) -> str:
     return authorization.split(" ", 1)[1].strip()
 
 
-async def get_current_user(
+def get_current_user(
     authorization: Annotated[str | None, Header()] = None,
 ) -> CurrentUser:
     """
@@ -91,14 +91,14 @@ async def get_current_user(
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
 
 
-async def require_customer(user: CurrentUserDep) -> CurrentUser:
+def require_customer(user: CurrentUserDep) -> CurrentUser:
     """Spec 4.2: hiding a tab is a convenience. This is the control."""
     if user.role != "customer":
         raise Forbidden("This is only available to shop accounts.")
     return user
 
 
-async def require_supplier(user: CurrentUserDep) -> CurrentUser:
+def require_supplier(user: CurrentUserDep) -> CurrentUser:
     if user.role != "supplier":
         raise Forbidden("This is only available to supplier accounts.")
     return user
