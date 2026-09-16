@@ -113,6 +113,11 @@ token choose a key type it was not signed with.
 screen that fires several requests at once crawls. Plain `def` runs in FastAPI's thread pool. Read an
 upload with `file.file.read()`, not `await file.read()`.
 
+**Google sign-in in Expo Go returns to `localhost:3000`.** Supabase's Redirect URLs allow-list did
+not match the `exp://<ip>:8081/--/` address, even entered exactly, so it fell back to the Site URL.
+Workaround for testing: set the Site URL itself to `exp://<laptop ip>:8081/--/` (changes with the
+network). For a real build set it to `inventix://`.
+
 **Upload rows live in memory between steps** (`_pending` in `uploads/service.py`). Editing a backend
 file restarts uvicorn and loses them, so do not edit the backend while someone is mid-upload.
 

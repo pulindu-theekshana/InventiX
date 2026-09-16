@@ -17,7 +17,7 @@ import { elevation, radius, spacing } from '../../src/theme/spacing';
 import { text } from '../../src/theme/typography';
 import { toMessage } from '../../src/lib/errors';
 import { createProfile } from '../../src/api/auth';
-import { signInDemo } from '../../src/stores/authStore';
+import { completeProfile, signInDemo } from '../../src/stores/authStore';
 import { useAuth } from '../../src/hooks/useAuth';
 
 export default function ProfileSetup() {
@@ -50,7 +50,7 @@ export default function ProfileSetup() {
       if (demo) {
         signInDemo(pendingRole!);
       } else {
-        await createProfile({
+        const profile = await createProfile({
           role: pendingRole!,
           business_name: form.business_name.trim(),
           contact_person: form.contact_person.trim(),
@@ -62,6 +62,7 @@ export default function ProfileSetup() {
             ? form.delivery_areas.split(',').map((a) => a.trim()).filter(Boolean)
             : undefined,
         });
+        completeProfile(profile);
       }
       /**
        * Spec 4.1 step 7: a supplier goes straight to adding listings, because they cannot
