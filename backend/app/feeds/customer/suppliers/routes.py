@@ -16,12 +16,12 @@ router = APIRouter(prefix="/customer/suppliers", tags=["customer: suppliers"])
 
 
 @router.get("", response_model=list[SupplierOut])
-async def search_suppliers(user: CustomerDep, q: str = Query(default="")) -> list[SupplierOut]:
+def search_suppliers(user: CustomerDep, q: str = Query(default="")) -> list[SupplierOut]:
     return service.search_by_company(user.db, q)
 
 
 @router.get("/by-product/{catalog_product_id}", response_model=list[SupplierOut])
-async def search_by_product(
+def search_by_product(
     catalog_product_id: str,
     user: CustomerDep,
     quantity: int = Query(default=0, ge=0,
@@ -32,5 +32,5 @@ async def search_by_product(
 
 
 @router.get("/{supplier_id}", response_model=SupplierProfileOut)
-async def get_supplier(supplier_id: str, user: CustomerDep) -> SupplierProfileOut:
+def get_supplier(supplier_id: str, user: CustomerDep) -> SupplierProfileOut:
     return service.get_profile(user.db, supplier_id, user.id)

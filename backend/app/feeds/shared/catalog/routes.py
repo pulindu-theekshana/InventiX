@@ -16,7 +16,7 @@ router = APIRouter(prefix="/catalog", tags=["catalog"])
 
 
 @router.get("/search", response_model=list[CatalogProductOut])
-async def search_catalog(
+def search_catalog(
     _user: CurrentUserDep,
     q: str = Query(default="", description="Free text. Empty returns the first page."),
 ) -> list[CatalogProductOut]:
@@ -25,11 +25,11 @@ async def search_catalog(
 
 
 @router.get("/categories", response_model=list[str])
-async def list_categories(_user: CurrentUserDep) -> list[str]:
+def list_categories(_user: CurrentUserDep) -> list[str]:
     return service.categories()
 
 
 @router.post("", response_model=CatalogProductOut, status_code=status.HTTP_201_CREATED)
-async def add_to_catalog(body: NewCatalogProductIn, _user: CustomerDep) -> CatalogProductOut:
+def add_to_catalog(body: NewCatalogProductIn, _user: CustomerDep) -> CatalogProductOut:
     """A shop adding a product the catalog does not have yet. Returns the existing row if it does."""
     return service.create(body)

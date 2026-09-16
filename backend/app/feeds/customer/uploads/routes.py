@@ -22,28 +22,28 @@ router = APIRouter(prefix="/customer/uploads", tags=["customer: uploads"])
 
 
 @router.post("", response_model=UploadSessionOut, status_code=status.HTTP_201_CREATED)
-async def start_upload(user: CustomerDep, file: UploadFile = File(...)) -> UploadSessionOut:  # noqa: B008 - FastAPI's documented idiom
+def start_upload(user: CustomerDep, file: UploadFile = File(...)) -> UploadSessionOut:  # noqa: B008 - FastAPI's documented idiom
     """
     Step one. Takes the actual file, not just its name: the backend hashes the
     contents to reject a duplicate, so it needs the contents (spec 15.4).
     """
-    content = await file.read()
+    content = file.file.read()
     return service.start(user.db, user.id, file.filename or "upload.csv", content)
 
 
 @router.post("/{upload_id}/mapping", status_code=status.HTTP_204_NO_CONTENT)
-async def save_mapping(upload_id: str, body: ColumnMapping, user: CustomerDep) -> None:
+def save_mapping(upload_id: str, body: ColumnMapping, user: CustomerDep) -> None:
     """Step two. Remembered and pre-filled on the next upload."""
     service.save_mapping(user.db, user.id, upload_id, body)
 
 
 @router.get("/{upload_id}/unmatched", response_model=list[UnmatchedRowOut])
-async def list_unmatched(upload_id: str, user: CustomerDep) -> list[UnmatchedRowOut]:
+def list_unmatched(upload_id: str, user: CustomerDep) -> list[UnmatchedRowOut]:
     return service.unmatched(user.db, user.id, upload_id)
 
 
 @router.post("/{upload_id}/unmatched", status_code=status.HTTP_204_NO_CONTENT)
-async def resolve_unmatched(
+def resolve_unmatched(
     upload_id: str, body: ResolveUnmatchedIn, user: CustomerDep
 ) -> None:
     """Step three. The choice becomes an alias and is reused forever after."""
@@ -51,5 +51,5 @@ async def resolve_unmatched(
 
 
 @router.post("/{upload_id}/apply", response_model=ApplyResultOut)
-async def apply_upload(upload_id: str, user: CustomerDep) -> ApplyResultOut:
+def apply_upload(upload_id: str, user: CustomerDep) -> ApplyResultOut:
     return service.apply(user.db, user.id, upload_id)
