@@ -71,6 +71,8 @@ class AddStockItemIn(BaseModel):
     catalog_product_id: str
     quantity_on_hand: int = Field(ge=0)
     low_threshold: int = Field(ge=0)
+    # The shop's own price. Needs migration 0021.
+    unit_price: float | None = Field(default=None, ge=0)
 
 
 class UpdateStockItemIn(BaseModel):

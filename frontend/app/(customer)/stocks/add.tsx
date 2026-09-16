@@ -30,6 +30,7 @@ export default function AddProduct() {
   const [chosen, setChosen] = useState<CatalogProduct | null>(null);
   const [quantity, setQuantity] = useState('');
   const [threshold, setThreshold] = useState('');
+  const [price, setPrice] = useState('');
   const submit = useSubmit();
   const [creating, setCreating] = useState(false);
   const [packSize, setPackSize] = useState('');
@@ -50,6 +51,7 @@ export default function AddProduct() {
       catalog_product_id: productId,
       quantity_on_hand: Number(quantity),
       low_threshold: Number(threshold || suggested || 0),
+      unit_price: price ? Number(price) : null,
     });
 
   async function save() {
@@ -93,6 +95,15 @@ export default function AddProduct() {
             ? 'Leave blank to use ' + suggested + ', about a quarter of what you hold.'
             : 'You can change this at any time.'
         }
+      />
+      <Input
+        label="Price per unit (LKR)"
+        value={price}
+        onChangeText={setPrice}
+        placeholder="250.00"
+        keyboardType="decimal-pad"
+        icon="cash-outline"
+        hint="Optional. Without it, the price comes from a supplier who sells this product."
       />
     </>
   );

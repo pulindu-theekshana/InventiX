@@ -22,8 +22,9 @@ from .schemas import (
 
 # One query, not N+1. Embedding the catalog product and the preferred supplier
 # means the whole feed is a single round trip rather than one per row.
+# `*` instead of a column list so the feed still loads on a database without 0021's unit_price.
 SELECT = (
-    "id, quantity_on_hand, low_threshold, restock_requested, preferred_supplier_id, "
+    "*, "
     "product_catalog!inner(id, name, category, pack_size, unit, barcode, is_seasonal, is_active), "
     "preferred_supplier:profiles!stock_items_preferred_supplier_id_fkey(id, business_name)"
 )
@@ -39,7 +40,8 @@ def _to_out(row: dict, price: float | None = None) -> StockItemOut:
         restock_requested=row["restock_requested"],
         preferred_supplier_id=row.get("preferred_supplier_id"),
         preferred_supplier_name=supplier.get("business_name"),
-        unit_price=price,
+        # The shop's own price when it entered one, otherwise a supplier's.
+        unit_price=float(row["unit_price"]) if row.get("unit_price") is not None else price,
         # The single classification rule. If the chart counted separately it
         # could say four items are low while the list shows three.
         status=stock.classify(
@@ -155,13 +157,17 @@ def add(db, owner_id: str, data: AddStockItemIn) -> StockItemOut:
         raise Conflict("You already track that product.")
 
     threshold = data.low_threshold or thresholds.default_threshold(data.quantity_on_hand)
-    created = db.table("stock_items").insert({
+    row = {
         "owner_id": owner_id,
         "catalog_product_id": data.catalog_product_id,
         "quantity_on_hand": data.quantity_on_hand,
         "low_threshold": threshold,
         "last_counted_at": "now()",
-    }).execute()
+    }
+    # Only sent when given, so adding without a price works before 0021 is applied.
+    if data.unit_price is not None:
+        row["unit_price"] = data.unit_price
+    created = db.table("stock_items").insert(row).execute()
     return get_one(db, owner_id, created.data[0]["id"])
 
 
