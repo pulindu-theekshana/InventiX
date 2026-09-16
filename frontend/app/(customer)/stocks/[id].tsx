@@ -89,7 +89,7 @@ export default function StockDetail() {
         quantity_requested: Math.max(data.low_threshold * 2 - data.quantity_on_hand, 1),
         quantity_available: supplier?.listing?.quantity_available ?? null,
         min_order_quantity: supplier?.listing?.min_order_quantity ?? null,
-        unit_price: data.unit_price,
+        unit_price: supplier?.listing?.unit_price ?? data.unit_price,
       };
 
       const { message_body, warnings, duplicates } = await generateMessage([line], supplier);

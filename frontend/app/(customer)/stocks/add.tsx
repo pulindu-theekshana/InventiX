@@ -45,26 +45,57 @@ export default function AddProduct() {
    */
   const suggested = quantity ? Math.max(Math.round(Number(quantity) * 0.25), 1) : null;
 
+  const stockFor = (productId: string) =>
+    addStockItem({
+      catalog_product_id: productId,
+      quantity_on_hand: Number(quantity),
+      low_threshold: Number(threshold || suggested || 0),
+    });
+
   async function save() {
     if (!chosen) return;
-    const ok = await submit.run(() =>
-      addStockItem({
-        catalog_product_id: chosen.id,
-        quantity_on_hand: Number(quantity),
-        low_threshold: Number(threshold || suggested || 0),
-      }),
-    );
+    const ok = await submit.run(() => stockFor(chosen.id));
     // Only leave the screen on success; a refusal must stay visible with the form intact.
     if (ok) router.back();
   }
 
-  /** The new row then goes through the same quantity and threshold step as any other product. */
+  /**
+   * Catalog row and stock item in one tap. If the second step fails, trying again is safe:
+   * the backend hands back the catalog row the first attempt created instead of a duplicate.
+   */
   async function saveNew() {
-    const ok = await create.run(async () =>
-      setChosen(await createCatalogProduct({ name: query.trim(), pack_size: packSize.trim(), category: category.trim() })),
-    );
-    if (ok) setCreating(false);
+    const ok = await create.run(async () => {
+      const product = await createCatalogProduct({ name: query.trim(), pack_size: packSize.trim(), category });
+      await stockFor(product.id);
+    });
+    if (ok) router.back();
   }
+
+  const quantityFields = (
+    <>
+      <Input
+        label="How many do you have now?"
+        value={quantity}
+        onChangeText={setQuantity}
+        placeholder="120"
+        keyboardType="number-pad"
+        icon="cube-outline"
+      />
+      <Input
+        label="Warn me when it drops to"
+        value={threshold}
+        onChangeText={setThreshold}
+        placeholder={suggested ? String(suggested) : '20'}
+        keyboardType="number-pad"
+        icon="trending-down-outline"
+        hint={
+          suggested
+            ? 'Leave blank to use ' + suggested + ', about a quarter of what you hold.'
+            : 'You can change this at any time.'
+        }
+      />
+    </>
+  );
 
   if (creating) {
     return (
@@ -82,13 +113,17 @@ export default function AddProduct() {
               <Chip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} />
             ))}
           </View>
+        </Card>
+
+        <Card style={styles.gap}>
+          {quantityFields}
           <ErrorBanner message={create.error} />
           <Button
-            label="Continue"
+            label="Add to my stock"
             variant="accent"
             size="lg"
             loading={create.busy}
-            disabled={query.trim().length < 2 || !packSize.trim() || !category}
+            disabled={query.trim().length < 2 || !packSize.trim() || !category || !quantity}
             onPress={saveNew}
             fullWidth
           />
@@ -116,27 +151,7 @@ export default function AddProduct() {
         </Card>
 
         <Card style={styles.gap}>
-          <Input
-            label="How many do you have now?"
-            value={quantity}
-            onChangeText={setQuantity}
-            placeholder="120"
-            keyboardType="number-pad"
-            icon="cube-outline"
-          />
-          <Input
-            label="Warn me when it drops to"
-            value={threshold}
-            onChangeText={setThreshold}
-            placeholder={suggested ? String(suggested) : '20'}
-            keyboardType="number-pad"
-            icon="trending-down-outline"
-            hint={
-              suggested
-                ? 'Leave blank to use ' + suggested + ', about a quarter of what you hold.'
-                : 'You can change this at any time.'
-            }
-          />
+          {quantityFields}
           <ErrorBanner message={submit.error} />
           <Button
             label="Add to my stock"

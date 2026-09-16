@@ -50,31 +50,34 @@ def _to_out(row: dict, price: float | None = None) -> StockItemOut:
 
 def _prices_for(db, rows: list[dict]) -> dict[str, float]:
     """
-    The preferred supplier's price per product, for the row display. One query for
-    all of them rather than one per row.
+    Price per stock item id, for the row display. The preferred supplier's price when
+    they list the product; otherwise the cheapest active listing, so a product with no
+    supplier chosen yet still shows what it costs. One query for all rows.
     """
-    pairs = {
-        (r["preferred_supplier_id"], r["product_catalog"]["id"])
-        for r in rows
-        if r.get("preferred_supplier_id")
-    }
-    if not pairs:
+    products = {r["product_catalog"]["id"] for r in rows}
+    if not products:
         return {}
 
     listings = (
         db.table("supplier_listings")
         .select("supplier_id, catalog_product_id, unit_price")
-        .in_("supplier_id", list({s for s, _ in pairs}))
-        .in_("catalog_product_id", list({p for _, p in pairs}))
+        .in_("catalog_product_id", list(products))
         .eq("is_active", True)
         .execute()
         .data
         or []
     )
-    return {
-        f"{l['supplier_id']}:{l['catalog_product_id']}": float(l["unit_price"])
-        for l in listings
-    }
+    prices = {}
+    for row in rows:
+        offers = {
+            l["supplier_id"]: float(l["unit_price"])
+            for l in listings
+            if l["catalog_product_id"] == row["product_catalog"]["id"]
+        }
+        if offers:
+            preferred = row.get("preferred_supplier_id")
+            prices[row["id"]] = offers[preferred] if preferred in offers else min(offers.values())
+    return prices
 
 
 def list_stocks(db, owner_id: str) -> list[StockItemOut]:
@@ -84,7 +87,7 @@ def list_stocks(db, owner_id: str) -> list[StockItemOut]:
     )
     prices = _prices_for(db, rows)
     items = [
-        _to_out(row, prices.get(f"{row.get('preferred_supplier_id')}:{row['product_catalog']['id']}"))
+        _to_out(row, prices.get(row["id"]))
         for row in rows
     ]
     # Spec 6.4 sorts Low stock by urgency; In stock reads better alphabetically.
@@ -127,9 +130,7 @@ def get_one(db, owner_id: str, stock_item_id: str) -> StockItemOut:
     )
     if not row or not row.data:
         raise NotFound("We could not find that product in your stock.")
-    prices = _prices_for(db, [row.data])
-    key = f"{row.data.get('preferred_supplier_id')}:{row.data['product_catalog']['id']}"
-    return _to_out(row.data, prices.get(key))
+    return _to_out(row.data, _prices_for(db, [row.data]).get(row.data["id"]))
 
 
 def adjustments(db, owner_id: str, stock_item_id: str) -> list[AdjustmentOut]:

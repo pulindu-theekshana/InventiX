@@ -107,7 +107,8 @@ export default function StocksHome() {
           suggestedQuantity ?? Math.max(item.low_threshold * 2 - item.quantity_on_hand, 1),
         quantity_available: supplier.listing?.quantity_available ?? null,
         min_order_quantity: supplier.listing?.min_order_quantity ?? null,
-        unit_price: item.unit_price ?? supplier.listing?.unit_price ?? null,
+        // The row price can be a different supplier's cheapest; the order uses this supplier's.
+        unit_price: supplier.listing?.unit_price ?? item.unit_price ?? null,
       }));
 
       const { message_body, warnings } = await generateMessage(lines, supplier);
