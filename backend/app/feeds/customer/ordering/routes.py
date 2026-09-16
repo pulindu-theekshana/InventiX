@@ -23,7 +23,7 @@ def _customer(user) -> dict:
 
 
 @router.post("/message", response_model=GenerateMessageOut)
-async def generate_message(body: GenerateMessageIn, user: CustomerDep) -> GenerateMessageOut:
+def generate_message(body: GenerateMessageIn, user: CustomerDep) -> GenerateMessageOut:
     return service.generate_message(
         user.db, _customer(user), body.supplier_id, body.lines,
         notes=body.notes, requested_delivery_date=body.requested_delivery_date,
@@ -31,7 +31,7 @@ async def generate_message(body: GenerateMessageIn, user: CustomerDep) -> Genera
 
 
 @router.post("/send", response_model=SendOrderOut, status_code=status.HTTP_201_CREATED)
-async def send_order(
+def send_order(
     body: SendOrderIn,
     user: CustomerDep,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,

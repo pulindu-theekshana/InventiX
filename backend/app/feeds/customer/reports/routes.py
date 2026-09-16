@@ -16,7 +16,7 @@ router = APIRouter(prefix="/customer/reports", tags=["customer: reports"])
 
 
 @router.get("", response_model=list[ReportSectionOut])
-async def list_sections(user: CustomerDep) -> list[ReportSectionOut]:
+def list_sections(user: CustomerDep) -> list[ReportSectionOut]:
     """
     Sections only, with no figures and no charts. Spec 7 builds this feed last,
     and the sections say what has to happen before each can show anything.
@@ -25,7 +25,7 @@ async def list_sections(user: CustomerDep) -> list[ReportSectionOut]:
 
 
 @router.get("/inventory", response_model=InventoryReportOut)
-async def inventory_report(
+def inventory_report(
     user: CustomerDep,
     days: int = Query(default=30, ge=7, le=90),
 ) -> InventoryReportOut:
