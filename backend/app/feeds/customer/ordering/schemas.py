@@ -20,6 +20,10 @@ class OrderLineIn(BaseModel):
 class GenerateMessageIn(BaseModel):
     supplier_id: str
     lines: list[OrderLineIn] = Field(min_length=1)
+    # Optional so the first preview, drawn before either box is filled, still works.
+    # Sent again on each regeneration, so the preview is exactly what the supplier reads.
+    notes: str | None = None
+    requested_delivery_date: date | None = None
 
 
 class GenerateMessageOut(BaseModel):
