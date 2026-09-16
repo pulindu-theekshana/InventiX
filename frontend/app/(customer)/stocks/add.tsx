@@ -162,6 +162,13 @@ export default function AddProduct() {
           icon="search"
           autoFocus
         />
+        <Button
+          label="Add a new product"
+          variant="outline"
+          icon="add"
+          onPress={() => setCreating(true)}
+          fullWidth
+        />
       </View>
       <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
         {(results.data ?? []).map((p) => (
@@ -181,14 +188,9 @@ export default function AddProduct() {
           <EmptyState
             icon="search-outline"
             title="Nothing matches that"
-            message="Products come from a shared catalog so shops and suppliers always mean the same thing. If yours is missing, add it."
-            actionLabel="Add a new product"
-            onAction={() => setCreating(true)}
+            message="Products come from a shared catalog so shops and suppliers always mean the same thing. If yours is missing, use Add a new product above."
           />
-        ) : (
-          // Also offered under a partial match: searching "rice" can list rices that are not yours.
-          <Button label="Can't find it? Add a new product" variant="ghost" onPress={() => setCreating(true)} fullWidth />
-        )}
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -196,7 +198,7 @@ export default function AddProduct() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  searchWrap: { padding: spacing.lg, paddingBottom: spacing.sm },
+  searchWrap: { padding: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm },
   list: { padding: spacing.lg, paddingTop: spacing.sm },
   scroll: { padding: spacing.lg, gap: spacing.lg },
   gap: { gap: spacing.md },
