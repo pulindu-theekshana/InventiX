@@ -7,6 +7,7 @@ Look here when : Send is wrongly disabled or enabled, the wrong supplier is used
 """
 
 import logging
+from datetime import date
 
 from ....core import idempotency
 from ....core.exceptions import NotFound, ValidationFailed
@@ -14,7 +15,6 @@ from ....domain import message_builder
 from ....integrations import queue
 from ...shared.notifications import service as notify
 from .schemas import GenerateMessageOut, OrderLineIn, SendOrderIn, SendOrderOut
-
 
 # An order in one of these states is still expected to arrive, so its products are
 # already on their way and ordering them again would double the delivery.
@@ -175,31 +175,43 @@ def duplicate_warnings(context: dict, lines: list[OrderLineIn]) -> list[str]:
     return warnings
 
 
-def generate_message(db, customer: dict, supplier_id: str,
-                     lines: list[OrderLineIn]) -> GenerateMessageOut:
-    """
-    Spec 6.5: built by the backend so the wording can improve without an app
-    release, and so two implementations cannot drift apart.
-    """
-    context = _load_context(db, customer["id"], supplier_id, lines)
-    message_lines = []
+def _message_lines(context: dict, lines: list[OrderLineIn]) -> list[message_builder.MessageLine]:
+    """Shared by the preview and the send, so the two can never describe the order differently."""
+    built = []
     for line in lines:
         item = context["items"][line.stock_item_id]
         listing = context["listings"].get(item["catalog_product_id"])
-        message_lines.append(message_builder.MessageLine(
+        built.append(message_builder.MessageLine(
             name=item["product_catalog"]["name"],
             pack_size=item["product_catalog"]["pack_size"],
             quantity_requested=line.quantity,
             current_quantity=item["quantity_on_hand"],
             unit_price=float(listing["unit_price"]) if listing else None,
         ))
+    return built
+
+
+def generate_message(db, customer: dict, supplier_id: str, lines: list[OrderLineIn],
+                     notes: str | None = None,
+                     requested_delivery_date: date | None = None) -> GenerateMessageOut:
+    """
+    Spec 6.5: built by the backend so the wording can improve without an app
+    release, and so two implementations cannot drift apart.
+
+    Notes and the delivery date are taken here so the preview is the message. Without
+    them the shop types a note, sees it vanish from the text, and has no way to know
+    whether the supplier will ever read it.
+    """
+    context = _load_context(db, customer["id"], supplier_id, lines)
 
     return GenerateMessageOut(
         message_body=message_builder.build(
             shop_name=customer["business_name"],
             supplier_name=context["supplier"]["business_name"],
-            lines=message_lines,
+            lines=_message_lines(context, lines),
             delivery_address=customer.get("address"),
+            requested_delivery_date=requested_delivery_date,
+            notes=notes,
         ),
         problems=validate(context, lines),
         warnings=duplicate_warnings(context, lines),
@@ -246,6 +258,23 @@ def send(db, customer: dict, data: SendOrderIn, idempotency_key: str) -> SendOrd
             "Send by WhatsApp or email instead."
         )
 
+    # 4. The message the supplier will read.
+    #
+    # Rebuilt here unless the owner edited the text themselves. The app generates a
+    # preview before the notes and delivery date are typed, so trusting what it sends
+    # would store a message missing exactly the part the shop wrote by hand -- the note
+    # would sit in its own column that no supplier screen reads.
+    message_body = data.message_body
+    if not data.message_edited:
+        message_body = message_builder.build(
+            shop_name=customer["business_name"],
+            supplier_name=context["supplier"]["business_name"],
+            lines=_message_lines(context, data.lines),
+            delivery_address=customer.get("address"),
+            requested_delivery_date=data.requested_delivery_date,
+            notes=data.notes,
+        )
+
     payload = []
     for line in data.lines:
         item = context["items"][line.stock_item_id]
@@ -265,7 +294,7 @@ def send(db, customer: dict, data: SendOrderIn, idempotency_key: str) -> SendOrd
             "p_customer_id": customer["id"],
             "p_supplier_id": data.supplier_id,
             "p_channel": data.channel,
-            "p_message_body": data.message_body,
+            "p_message_body": message_body,
             "p_message_edited": data.message_edited,
             "p_delivery_date": data.requested_delivery_date.isoformat()
             if data.requested_delivery_date else None,

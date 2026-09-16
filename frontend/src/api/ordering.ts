@@ -19,6 +19,8 @@ export async function generateMessage(
   lines: RestockLine[],
   supplier: SupplierView | null,
   shopName = 'Wasantha Kade',
+  /** Folded into the text by the backend, so the preview is what the supplier will read. */
+  extras: { notes?: string; requested_delivery_date?: string | null } = {},
 ): Promise<{ message_body: string; warnings: string[]; duplicates: string[] }> {
   if (useMockData) {
     const to = supplier?.business_name ?? 'your supplier';
@@ -55,6 +57,9 @@ export async function generateMessage(
       body: JSON.stringify({
         supplier_id: supplier?.id,
         lines: lines.map((l) => ({ stock_item_id: l.stock_item_id, quantity: l.quantity_requested })),
+        notes: extras.notes || null,
+        // An emptied date box holds '', which is not a date. Send nothing instead of ''.
+        requested_delivery_date: extras.requested_delivery_date || null,
       }),
     },
   );

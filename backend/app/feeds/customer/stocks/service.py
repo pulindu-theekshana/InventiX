@@ -22,8 +22,9 @@ from .schemas import (
 
 # One query, not N+1. Embedding the catalog product and the preferred supplier
 # means the whole feed is a single round trip rather than one per row.
+# `*` instead of a column list so the feed still loads on a database without 0021's unit_price.
 SELECT = (
-    "id, quantity_on_hand, low_threshold, restock_requested, preferred_supplier_id, "
+    "*, "
     "product_catalog!inner(id, name, category, pack_size, unit, barcode, is_seasonal, is_active), "
     "preferred_supplier:profiles!stock_items_preferred_supplier_id_fkey(id, business_name)"
 )
@@ -39,7 +40,8 @@ def _to_out(row: dict, price: float | None = None) -> StockItemOut:
         restock_requested=row["restock_requested"],
         preferred_supplier_id=row.get("preferred_supplier_id"),
         preferred_supplier_name=supplier.get("business_name"),
-        unit_price=price,
+        # The shop's own price when it entered one, otherwise a supplier's.
+        unit_price=float(row["unit_price"]) if row.get("unit_price") is not None else price,
         # The single classification rule. If the chart counted separately it
         # could say four items are low while the list shows three.
         status=stock.classify(
@@ -50,31 +52,34 @@ def _to_out(row: dict, price: float | None = None) -> StockItemOut:
 
 def _prices_for(db, rows: list[dict]) -> dict[str, float]:
     """
-    The preferred supplier's price per product, for the row display. One query for
-    all of them rather than one per row.
+    Price per stock item id, for the row display. The preferred supplier's price when
+    they list the product; otherwise the cheapest active listing, so a product with no
+    supplier chosen yet still shows what it costs. One query for all rows.
     """
-    pairs = {
-        (r["preferred_supplier_id"], r["product_catalog"]["id"])
-        for r in rows
-        if r.get("preferred_supplier_id")
-    }
-    if not pairs:
+    products = {r["product_catalog"]["id"] for r in rows}
+    if not products:
         return {}
 
     listings = (
         db.table("supplier_listings")
         .select("supplier_id, catalog_product_id, unit_price")
-        .in_("supplier_id", list({s for s, _ in pairs}))
-        .in_("catalog_product_id", list({p for _, p in pairs}))
+        .in_("catalog_product_id", list(products))
         .eq("is_active", True)
         .execute()
         .data
         or []
     )
-    return {
-        f"{l['supplier_id']}:{l['catalog_product_id']}": float(l["unit_price"])
-        for l in listings
-    }
+    prices = {}
+    for row in rows:
+        offers = {
+            l["supplier_id"]: float(l["unit_price"])
+            for l in listings
+            if l["catalog_product_id"] == row["product_catalog"]["id"]
+        }
+        if offers:
+            preferred = row.get("preferred_supplier_id")
+            prices[row["id"]] = offers[preferred] if preferred in offers else min(offers.values())
+    return prices
 
 
 def list_stocks(db, owner_id: str) -> list[StockItemOut]:
@@ -84,7 +89,7 @@ def list_stocks(db, owner_id: str) -> list[StockItemOut]:
     )
     prices = _prices_for(db, rows)
     items = [
-        _to_out(row, prices.get(f"{row.get('preferred_supplier_id')}:{row['product_catalog']['id']}"))
+        _to_out(row, prices.get(row["id"]))
         for row in rows
     ]
     # Spec 6.4 sorts Low stock by urgency; In stock reads better alphabetically.
@@ -127,9 +132,7 @@ def get_one(db, owner_id: str, stock_item_id: str) -> StockItemOut:
     )
     if not row or not row.data:
         raise NotFound("We could not find that product in your stock.")
-    prices = _prices_for(db, [row.data])
-    key = f"{row.data.get('preferred_supplier_id')}:{row.data['product_catalog']['id']}"
-    return _to_out(row.data, prices.get(key))
+    return _to_out(row.data, _prices_for(db, [row.data]).get(row.data["id"]))
 
 
 def adjustments(db, owner_id: str, stock_item_id: str) -> list[AdjustmentOut]:
@@ -154,13 +157,17 @@ def add(db, owner_id: str, data: AddStockItemIn) -> StockItemOut:
         raise Conflict("You already track that product.")
 
     threshold = data.low_threshold or thresholds.default_threshold(data.quantity_on_hand)
-    created = db.table("stock_items").insert({
+    row = {
         "owner_id": owner_id,
         "catalog_product_id": data.catalog_product_id,
         "quantity_on_hand": data.quantity_on_hand,
         "low_threshold": threshold,
         "last_counted_at": "now()",
-    }).execute()
+    }
+    # Only sent when given, so adding without a price works before 0021 is applied.
+    if data.unit_price is not None:
+        row["unit_price"] = data.unit_price
+    created = db.table("stock_items").insert(row).execute()
     return get_one(db, owner_id, created.data[0]["id"])
 
 

@@ -89,6 +89,19 @@ export function setField(field: 'notes' | 'requested_delivery_date', value: stri
 }
 
 /**
+ * Replaces the text after the backend has rebuilt it, which happens when a note or the
+ * delivery date changes — the message names both. The new text becomes the generated
+ * baseline too, so the customer is not warned about an edit they never made.
+ *
+ * Only called while message_edited is false: their own wording is theirs to keep.
+ */
+export function applyRegenerated(text: string) {
+  if (!draft) return;
+  draft = { ...draft, message_body: text, generated_message: text, message_edited: false };
+  emit();
+}
+
+/**
  * Spec 6.5: the message is regenerated in full by the backend, never patched by find and
  * replace, because a different supplier has different prices, availability and minimums.
  */

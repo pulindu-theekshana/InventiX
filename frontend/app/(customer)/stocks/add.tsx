@@ -1,7 +1,7 @@
 /**
  * Add product
  * 
- * Purpose : Search the shared catalog, pick a product, set the starting quantity and the low threshold. Spec 5.2 is why this is a search and not a text field: both sides must point at the same catalog row or nothing can ever be matched.
+ * Purpose : Search the shared catalog, pick a product, set the starting quantity and the low threshold. Spec 5.2 is why this is a search first: both sides must point at the same catalog row or nothing can ever be matched. A product nobody has entered yet can be added to the catalog from here.
  * Spec    : Section 6.7
  * Look here when : Adding a product fails.
  */
@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../../src/components/ui/Card';
 import { Input } from '../../../src/components/ui/Input';
 import { Button } from '../../../src/components/ui/Button';
+import { Chip } from '../../../src/components/ui/Chip';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { ErrorBanner } from '../../../src/components/ErrorBanner';
 import { colors } from '../../../src/theme/colors';
@@ -20,7 +21,7 @@ import { radius, spacing } from '../../../src/theme/spacing';
 import { text } from '../../../src/theme/typography';
 import { useAsync } from '../../../src/hooks/useAsync';
 import { useSubmit } from '../../../src/hooks/useSubmit';
-import { searchCatalog } from '../../../src/api/catalog';
+import { createCatalogProduct, listCategories, searchCatalog } from '../../../src/api/catalog';
 import { addStockItem } from '../../../src/api/stocks';
 import type { CatalogProduct } from '../../../src/types/database';
 
@@ -29,7 +30,13 @@ export default function AddProduct() {
   const [chosen, setChosen] = useState<CatalogProduct | null>(null);
   const [quantity, setQuantity] = useState('');
   const [threshold, setThreshold] = useState('');
+  const [price, setPrice] = useState('');
   const submit = useSubmit();
+  const [creating, setCreating] = useState(false);
+  const [packSize, setPackSize] = useState('');
+  const [category, setCategory] = useState('');
+  const create = useSubmit();
+  const categories = useAsync(listCategories, []);
   const results = useAsync(() => searchCatalog(query), [query]);
 
   /**
@@ -39,17 +46,102 @@ export default function AddProduct() {
    */
   const suggested = quantity ? Math.max(Math.round(Number(quantity) * 0.25), 1) : null;
 
+  const stockFor = (productId: string) =>
+    addStockItem({
+      catalog_product_id: productId,
+      quantity_on_hand: Number(quantity),
+      low_threshold: Number(threshold || suggested || 0),
+      unit_price: price ? Number(price) : null,
+    });
+
   async function save() {
     if (!chosen) return;
-    const ok = await submit.run(() =>
-      addStockItem({
-        catalog_product_id: chosen.id,
-        quantity_on_hand: Number(quantity),
-        low_threshold: Number(threshold || suggested || 0),
-      }),
-    );
+    const ok = await submit.run(() => stockFor(chosen.id));
     // Only leave the screen on success; a refusal must stay visible with the form intact.
     if (ok) router.back();
+  }
+
+  /**
+   * Catalog row and stock item in one tap. If the second step fails, trying again is safe:
+   * the backend hands back the catalog row the first attempt created instead of a duplicate.
+   */
+  async function saveNew() {
+    const ok = await create.run(async () => {
+      const product = await createCatalogProduct({ name: query.trim(), pack_size: packSize.trim(), category });
+      await stockFor(product.id);
+    });
+    if (ok) router.back();
+  }
+
+  const quantityFields = (
+    <>
+      <Input
+        label="How many do you have now?"
+        value={quantity}
+        onChangeText={setQuantity}
+        placeholder="120"
+        keyboardType="number-pad"
+        icon="cube-outline"
+      />
+      <Input
+        label="Warn me when it drops to"
+        value={threshold}
+        onChangeText={setThreshold}
+        placeholder={suggested ? String(suggested) : '20'}
+        keyboardType="number-pad"
+        icon="trending-down-outline"
+        hint={
+          suggested
+            ? 'Leave blank to use ' + suggested + ', about a quarter of what you hold.'
+            : 'You can change this at any time.'
+        }
+      />
+      <Input
+        label="Price per unit (LKR)"
+        value={price}
+        onChangeText={setPrice}
+        placeholder="250.00"
+        keyboardType="decimal-pad"
+        icon="cash-outline"
+        hint="Optional. Without it, the price comes from a supplier who sells this product."
+      />
+    </>
+  );
+
+  if (creating) {
+    return (
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <Card style={styles.gap}>
+          <Text style={text.h2}>New product</Text>
+          <Text style={[text.caption, styles.muted]}>
+            Every shop and supplier shares this list, so name it the way it is printed on the pack.
+          </Text>
+          <Input label="Product name" value={query} onChangeText={setQuery} placeholder="Munchee Cream Crackers" icon="pricetag-outline" />
+          <Input label="Pack size" value={packSize} onChangeText={setPackSize} placeholder="490 g" icon="resize-outline" />
+          <Text style={[text.label, styles.muted]}>Category</Text>
+          <View style={styles.chips}>
+            {(categories.data ?? []).map((c) => (
+              <Chip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} />
+            ))}
+          </View>
+        </Card>
+
+        <Card style={styles.gap}>
+          {quantityFields}
+          <ErrorBanner message={create.error} />
+          <Button
+            label="Add to my stock"
+            variant="accent"
+            size="lg"
+            loading={create.busy}
+            disabled={query.trim().length < 2 || !packSize.trim() || !category || !quantity}
+            onPress={saveNew}
+            fullWidth
+          />
+          <Button label="Back to search" variant="ghost" onPress={() => setCreating(false)} fullWidth />
+        </Card>
+      </ScrollView>
+    );
   }
 
   if (chosen) {
@@ -70,27 +162,7 @@ export default function AddProduct() {
         </Card>
 
         <Card style={styles.gap}>
-          <Input
-            label="How many do you have now?"
-            value={quantity}
-            onChangeText={setQuantity}
-            placeholder="120"
-            keyboardType="number-pad"
-            icon="cube-outline"
-          />
-          <Input
-            label="Warn me when it drops to"
-            value={threshold}
-            onChangeText={setThreshold}
-            placeholder={suggested ? String(suggested) : '20'}
-            keyboardType="number-pad"
-            icon="trending-down-outline"
-            hint={
-              suggested
-                ? 'Leave blank to use ' + suggested + ', about a quarter of what you hold.'
-                : 'You can change this at any time.'
-            }
-          />
+          {quantityFields}
           <ErrorBanner message={submit.error} />
           <Button
             label="Add to my stock"
@@ -116,6 +188,13 @@ export default function AddProduct() {
           icon="search"
           autoFocus
         />
+        <Button
+          label="Add a new product"
+          variant="outline"
+          icon="add"
+          onPress={() => setCreating(true)}
+          fullWidth
+        />
       </View>
       <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
         {(results.data ?? []).map((p) => (
@@ -135,9 +214,7 @@ export default function AddProduct() {
           <EmptyState
             icon="search-outline"
             title="Nothing matches that"
-            message="Products come from a shared catalog so shops and suppliers always mean the same thing. If yours is missing, request it and it will be reviewed."
-            actionLabel="Request this product"
-            onAction={() => {}}
+            message="Products come from a shared catalog so shops and suppliers always mean the same thing. If yours is missing, use Add a new product above."
           />
         ) : null}
       </ScrollView>
@@ -147,13 +224,14 @@ export default function AddProduct() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  searchWrap: { padding: spacing.lg, paddingBottom: spacing.sm },
+  searchWrap: { padding: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm },
   list: { padding: spacing.lg, paddingTop: spacing.sm },
   scroll: { padding: spacing.lg, gap: spacing.lg },
   gap: { gap: spacing.md },
   muted: { color: colors.textMuted },
   chosen: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   flex: { flex: 1 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   result: { marginBottom: spacing.sm, borderRadius: radius.md },
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
 });

@@ -138,6 +138,7 @@ export async function addStockItem(input: {
   catalog_product_id: string;
   quantity_on_hand: number;
   low_threshold: number;
+  unit_price?: number | null;
 }): Promise<void> {
   if (useMockData) return mock(undefined);
   return request('/customer/stocks', { method: 'POST', body: JSON.stringify(input) });

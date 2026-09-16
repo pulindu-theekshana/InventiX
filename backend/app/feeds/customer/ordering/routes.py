@@ -24,7 +24,10 @@ def _customer(user) -> dict:
 
 @router.post("/message", response_model=GenerateMessageOut)
 async def generate_message(body: GenerateMessageIn, user: CustomerDep) -> GenerateMessageOut:
-    return service.generate_message(user.db, _customer(user), body.supplier_id, body.lines)
+    return service.generate_message(
+        user.db, _customer(user), body.supplier_id, body.lines,
+        notes=body.notes, requested_delivery_date=body.requested_delivery_date,
+    )
 
 
 @router.post("/send", response_model=SendOrderOut, status_code=status.HTTP_201_CREATED)

@@ -6,11 +6,11 @@ Spec    : Section 5.2
 Look here when : Catalog search returns nothing.
 """
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, status
 
-from ....dependencies import CurrentUserDep
+from ....dependencies import CurrentUserDep, CustomerDep
 from . import service
-from .schemas import CatalogProductOut
+from .schemas import CatalogProductOut, NewCatalogProductIn
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
@@ -22,3 +22,14 @@ async def search_catalog(
 ) -> list[CatalogProductOut]:
     """Any authenticated user: customers add stock from it, suppliers add listings."""
     return service.search(q)
+
+
+@router.get("/categories", response_model=list[str])
+async def list_categories(_user: CurrentUserDep) -> list[str]:
+    return service.categories()
+
+
+@router.post("", response_model=CatalogProductOut, status_code=status.HTTP_201_CREATED)
+async def add_to_catalog(body: NewCatalogProductIn, _user: CustomerDep) -> CatalogProductOut:
+    """A shop adding a product the catalog does not have yet. Returns the existing row if it does."""
+    return service.create(body)

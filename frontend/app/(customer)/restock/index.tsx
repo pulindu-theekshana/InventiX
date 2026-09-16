@@ -24,7 +24,7 @@ import { fontFamily, fontSize, text } from '../../../src/theme/typography';
 import { currency, rating } from '../../../src/lib/format';
 import { toMessage } from '../../../src/lib/errors';
 import { availableChannels } from '../../../src/constants/channels';
-import { newIdempotencyKey, sendOrder } from '../../../src/api/ordering';
+import { generateMessage, newIdempotencyKey, sendOrder } from '../../../src/api/ordering';
 import * as draftStore from '../../../src/stores/restockDraftStore';
 import type { Channel } from '../../../src/types/database';
 
@@ -39,6 +39,27 @@ export default function Restock() {
   const [idempotencyKey] = useState(newIdempotencyKey);
 
   const problems = useMemo(() => draftStore.validate(draft), [draft]);
+
+  /**
+   * The message names the delivery date and repeats the note, so both have to be rebuilt
+   * into it — otherwise a shop types a note, sends, and the supplier never sees it.
+   *
+   * On blur rather than on every keystroke: one request when they finish typing. Skipped
+   * once the message has been edited by hand, which is theirs to keep.
+   */
+  async function regenerate() {
+    const current = draftStore.getDraft();
+    if (!current || current.message_edited) return;
+    try {
+      const { message_body } = await generateMessage(current.lines, current.supplier, undefined, {
+        notes: current.notes,
+        requested_delivery_date: current.requested_delivery_date,
+      });
+      draftStore.applyRegenerated(message_body);
+    } catch {
+      /* Leave the previous text in place: the send rebuilds it server-side regardless. */
+    }
+  }
 
   /**
    * Reached with nothing to send: the draft is dropped when an order goes through, so this
@@ -193,6 +214,7 @@ export default function Restock() {
         <TextInput
           value={draft.requested_delivery_date ?? ''}
           onChangeText={(v) => draftStore.setField('requested_delivery_date', v)}
+          onBlur={regenerate}
           placeholder="YYYY-MM-DD"
           placeholderTextColor={colors.textSubtle}
           style={styles.field}
@@ -202,6 +224,7 @@ export default function Restock() {
         <TextInput
           value={draft.notes}
           onChangeText={(v) => draftStore.setField('notes', v)}
+          onBlur={regenerate}
           placeholder="Anything else the supplier should know"
           placeholderTextColor={colors.textSubtle}
           multiline

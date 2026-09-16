@@ -6,9 +6,9 @@
  * Look here when : Listings render wrongly.
  */
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../../src/components/ui/Card';
 import { Badge } from '../../../src/components/ui/Badge';
@@ -28,6 +28,19 @@ export default function Listings() {
   /** Spec 10.1 — the supplier's own dashboard, the mirror of the shop's stock overview. */
   const overview = useAsync(() => getOverview(), []);
   const [query, setQuery] = useState('');
+
+  /**
+   * Adding, editing or retiring a listing all return here, and the list would otherwise
+   * still show what it fetched on the way out — so a product just added looks like it was
+   * never saved. Refetching on focus is what makes the new row appear without a pull.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      listings.refresh();
+      overview.refresh();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
 
   const all = listings.data ?? [];
   const q = query.trim().toLowerCase();
