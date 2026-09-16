@@ -6,6 +6,8 @@
  * Look here when : The app forgets who is signed in.
  */
 
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { AuthProfile } from '../types/api';
 import type { Role } from '../types/database';
@@ -88,6 +90,37 @@ export async function signIn(email: string, password: string): Promise<void> {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
   await loadProfile(data.user.id, data.user.email ?? '');
+}
+
+/**
+ * Google through Supabase OAuth. The browser returns to the app with the session tokens in the
+ * URL fragment (implicit flow, the supabase-js default). A first-time Google user has an auth
+ * user but no profiles row, so they still need to pick a role and fill in profile-setup.
+ */
+export async function signInWithGoogle(): Promise<'signedIn' | 'needsProfile' | 'cancelled'> {
+  if (!supabase) throw new Error('Supabase is not configured. Use Explore the app instead.');
+  const redirectTo = Linking.createURL('/');
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo, skipBrowserRedirect: true },
+  });
+  if (error) throw error;
+
+  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  if (result.type !== 'success') return 'cancelled';
+
+  // Tokens arrive after '#', errors after '?' — read both.
+  const params = new URLSearchParams(result.url.split(/[?#]/).slice(1).join('&'));
+  const failure = params.get('error_description');
+  if (failure) throw new Error(failure);
+  const access_token = params.get('access_token');
+  const refresh_token = params.get('refresh_token');
+  if (!access_token || !refresh_token) throw new Error('Google sign-in did not return a session.');
+
+  const { data: session, error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
+  if (sessionError || !session.user) throw sessionError ?? new Error('Google sign-in failed.');
+  await loadProfile(session.user.id, session.user.email ?? '');
+  return state.status === 'signedIn' ? 'signedIn' : 'needsProfile';
 }
 
 /**

@@ -7,7 +7,7 @@
  */
 
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../src/theme/colors';
 import { elevation, radius, spacing } from '../../src/theme/spacing';
@@ -39,9 +39,12 @@ const ROLES: {
 ];
 
 export default function ChooseRole() {
+  // Set by Google sign-in: the auth user already exists, so skip email/password registration.
+  const { google } = useLocalSearchParams<{ google?: string }>();
+
   function pick(role: Role) {
     setPendingRole(role);
-    router.push('/(auth)/register');
+    router.push(google ? '/(auth)/profile-setup' : '/(auth)/register');
   }
 
   return (
