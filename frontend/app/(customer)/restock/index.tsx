@@ -14,6 +14,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Modal } from '../../../src/components/ui/Modal';
+import { DateInput } from '../../../src/components/ui/DateInput';
 import { Button } from '../../../src/components/ui/Button';
 import { Badge } from '../../../src/components/ui/Badge';
 import { EmptyState } from '../../../src/components/EmptyState';
@@ -189,13 +190,10 @@ export default function Restock() {
           </Text>
         ) : null}
 
-        <Text style={[text.label, styles.sectionLabel]}>Delivery date</Text>
-        <TextInput
+        <DateInput
+          label="Delivery date"
           value={draft.requested_delivery_date ?? ''}
           onChangeText={(v) => draftStore.setField('requested_delivery_date', v)}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor={colors.textSubtle}
-          style={styles.field}
         />
 
         <Text style={[text.label, styles.sectionLabel]}>Notes</Text>

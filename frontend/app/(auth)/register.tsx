@@ -10,7 +10,9 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Input } from '../../src/components/ui/Input';
+import { EmailInput } from '../../src/components/ui/EmailInput';
+import { PasswordInput } from '../../src/components/ui/PasswordInput';
+import { MIN_PASSWORD } from '../../src/lib/validate';
 import { Button } from '../../src/components/ui/Button';
 import { ErrorBanner } from '../../src/components/ErrorBanner';
 import { colors } from '../../src/theme/colors';
@@ -32,8 +34,7 @@ export default function Register() {
   if (!pendingRole) return <Redirect href="/(auth)/choose-role" />;
 
   const mismatch = confirm.length > 0 && confirm !== password;
-  const tooShort = password.length > 0 && password.length < 8;
-  const canSubmit = email.trim().length > 0 && password.length >= 8 && confirm === password;
+  const canSubmit = email.trim().length > 0 && password.length >= MIN_PASSWORD && confirm === password;
 
   async function handleRegister() {
     setBusy(true);
@@ -73,32 +74,20 @@ export default function Register() {
           <Text style={[text.h2, styles.heading]}>Create your account</Text>
           <ErrorBanner message={error} />
 
-          <Input
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            icon="mail-outline"
-          />
-          <Input
-            label="Password"
+          <EmailInput value={email} onChangeText={setEmail} required />
+          <PasswordInput
             value={password}
             onChangeText={setPassword}
-            placeholder="At least 8 characters"
-            secureTextEntry
-            icon="lock-closed-outline"
-            error={tooShort ? 'Use at least 8 characters.' : null}
+            placeholder={`At least ${MIN_PASSWORD} characters`}
+            required
           />
-          <Input
+          <PasswordInput
             label="Confirm password"
             value={confirm}
             onChangeText={setConfirm}
             placeholder="Type it again"
-            secureTextEntry
-            icon="lock-closed-outline"
-            error={mismatch ? 'These two do not match.' : null}
+            extraErrors={mismatch ? ['These two do not match.'] : undefined}
+            required
           />
 
           <Button

@@ -12,6 +12,7 @@ import { Link, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Input } from '../../src/components/ui/Input';
+import { EmailInput } from '../../src/components/ui/EmailInput';
 import { Button } from '../../src/components/ui/Button';
 import { ErrorBanner } from '../../src/components/ErrorBanner';
 import { colors } from '../../src/theme/colors';
@@ -63,15 +64,7 @@ export default function Login() {
           <Text style={[text.h2, styles.heading]}>Sign in</Text>
           <ErrorBanner message={error} />
 
-          <Input
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            icon="mail-outline"
-          />
+          <EmailInput value={email} onChangeText={setEmail} />
           <Input
             label="Password"
             value={password}

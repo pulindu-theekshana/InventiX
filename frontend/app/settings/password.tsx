@@ -12,6 +12,8 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../src/components/ui/Card';
 import { Input } from '../../src/components/ui/Input';
+import { PasswordInput } from '../../src/components/ui/PasswordInput';
+import { MIN_PASSWORD } from '../../src/lib/validate';
 import { Button } from '../../src/components/ui/Button';
 import { ErrorBanner } from '../../src/components/ErrorBanner';
 import { colors } from '../../src/theme/colors';
@@ -21,7 +23,7 @@ import { useSubmit } from '../../src/hooks/useSubmit';
 import { changePassword } from '../../src/stores/authStore';
 
 /** Matches the minimum the Register screen enforces, so the two never disagree. */
-const MIN = 8;
+const MIN = MIN_PASSWORD;
 
 export default function ChangePassword() {
   const [current, setCurrent] = useState('');
@@ -30,7 +32,6 @@ export default function ChangePassword() {
   const [done, setDone] = useState(false);
   const { busy, error, run } = useSubmit();
 
-  const tooShort = next.length > 0 && next.length < MIN;
   const mismatch = confirm.length > 0 && confirm !== next;
   const unchanged = next.length > 0 && next === current;
   const canSave =
@@ -79,24 +80,21 @@ export default function ChangePassword() {
         </Card>
 
         <Card style={styles.gap}>
-          <Input
+          <PasswordInput
             label="New password"
             value={next}
             onChangeText={setNext}
-            secureTextEntry
-            autoCapitalize="none"
             icon="key-outline"
-            error={tooShort ? `At least ${MIN} characters.` : null}
-            hint={tooShort ? undefined : `At least ${MIN} characters.`}
+            hint={`At least ${MIN} characters.`}
+            required
           />
-          <Input
+          <PasswordInput
             label="Type it again"
             value={confirm}
             onChangeText={setConfirm}
-            secureTextEntry
-            autoCapitalize="none"
             icon="key-outline"
-            error={mismatch ? 'The two do not match.' : null}
+            extraErrors={mismatch ? ['The two do not match.'] : undefined}
+            required
           />
           {unchanged ? (
             <Text style={[text.caption, styles.warn]}>
