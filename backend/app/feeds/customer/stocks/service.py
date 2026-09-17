@@ -164,7 +164,6 @@ def add(db, owner_id: str, data: AddStockItemIn) -> StockItemOut:
         "low_threshold": threshold,
         "last_counted_at": "now()",
     }
-    # Only sent when given, so adding without a price works before 0021 is applied.
     if data.unit_price is not None:
         row["unit_price"] = data.unit_price
     created = db.table("stock_items").insert(row).execute()
