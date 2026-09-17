@@ -17,7 +17,9 @@ import { fontSize, text } from '../theme/typography';
 type TabScreenOptions = NonNullable<ComponentProps<typeof Tabs>['screenOptions']>;
 
 /** Height of the bar itself, before anything the operating system reserves below it. */
-const BAR_HEIGHT = 62;
+// Sized so the selected pill wraps its content evenly: 5 padding + 28 icon box + 18 label + 5
+// padding = 56, plus the bar's own top and bottom padding. Shorter and the pill clips the label.
+const BAR_HEIGHT = 70;
 const BAR_PADDING_BOTTOM = 8;
 /** The bar's own geometry, unchanged: the larger icon and label still fit inside it. */
 const BAR_PADDING_TOP = 6;
@@ -65,5 +67,6 @@ export function useTabScreenOptions(): TabScreenOptions {
 }
 
 const styles = StyleSheet.create({
-  label: { fontSize: fontSize.sm, lineHeight: 16 },
+  // 18, not 16: at 13pt bold the descender of y and p falls outside a 16pt line and is clipped.
+  label: { fontSize: fontSize.sm, lineHeight: 18 },
 });
