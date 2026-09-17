@@ -66,6 +66,22 @@ export function useTabScreenOptions(): TabScreenOptions {
   };
 }
 
+/**
+ * The header for a feed's own stack (stocks/_layout.tsx and friends). Same yellow bar and bell and
+ * menu as the tab header, plus a back arrow on every screen after the first. A tab has no history
+ * of its own, which is why each feed is a stack: back then goes exactly one screen.
+ */
+export const feedStackScreenOptions = {
+  headerStyle: { backgroundColor: colors.primary },
+  headerTintColor: colors.brandInk,
+  headerTitleStyle: { ...text.h2, color: colors.brandInk },
+  headerTitleAlign: 'center' as const,
+  headerShadowVisible: false,
+  headerBackButtonDisplayMode: 'minimal' as const,
+  headerRight: () => <TabHeaderButtons />,
+  contentStyle: { backgroundColor: colors.background },
+};
+
 const styles = StyleSheet.create({
   // 18, not 16: at 13pt bold the descender of y and p falls outside a 16pt line and is clipped.
   label: { fontSize: fontSize.sm, lineHeight: 18 },

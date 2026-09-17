@@ -67,7 +67,7 @@ export default function AddProduct() {
       }),
     );
     if (!ok) return;
-    router.replace('/(supplier)/listings');
+    router.dismissTo('/(supplier)/listings');
   }
 
   return (
