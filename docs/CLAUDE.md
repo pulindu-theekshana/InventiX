@@ -23,7 +23,7 @@ plus the traps already discovered, so they are not rediscovered one 500 at a tim
 The whole team shares **one** Supabase project. Everyone's app and backend point at it, so a change
 made once is a change for everybody. As of 12 September 2026 it already holds:
 
-- migrations `0001`–`0020`, both files in `functions/`, all of `policies/`
+- migrations `0001`–`0022` (0021 and 0022 were pasted into the SQL editor by hand, then `notify pgrst, 'reload schema';`), both files in `functions/`, all of `policies/`
 - seeds `product_catalog` (36 products), `seasonal_events`, `app_config`
 - `demo_data`: two auth users (`wasantha.kade@inventix.lk` shop, `demo.supplier@inventix.lk`
   supplier), 4 stock items, 4 supplier listings, 2 orders, 1 rating
