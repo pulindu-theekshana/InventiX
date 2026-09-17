@@ -6,7 +6,10 @@ Spec    : Section 6.1 to 6.4 and 6.7
 Look here when : The wrong items appear in a section, or the pie chart numbers are wrong.
 """
 
+import logging
 from datetime import date
+
+from postgrest.exceptions import APIError
 
 from ....core.exceptions import Conflict, NotFound
 from ....domain import seasonal, stock, thresholds
@@ -28,6 +31,8 @@ SELECT = (
     "product_catalog!inner(id, name, category, pack_size, unit, barcode, is_seasonal, is_active), "
     "preferred_supplier:profiles!stock_items_preferred_supplier_id_fkey(id, business_name)"
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _to_out(row: dict, price: float | None = None) -> StockItemOut:
@@ -167,7 +172,17 @@ def add(db, owner_id: str, data: AddStockItemIn) -> StockItemOut:
     # Only sent when given, so adding without a price works before 0021 is applied.
     if data.unit_price is not None:
         row["unit_price"] = data.unit_price
-    created = db.table("stock_items").insert(row).execute()
+    try:
+        created = db.table("stock_items").insert(row).execute()
+    except APIError as e:
+        # PGRST204: the database has no unit_price column because migration 0021 has not
+        # run. Adding the product matters more than its price, so add it without one.
+        # ponytail: delete this fallback once 0021 is applied.
+        if e.code != "PGRST204" or "unit_price" not in row:
+            raise
+        logger.warning("stock_items.unit_price missing; apply migration 0021. Price not saved.")
+        del row["unit_price"]
+        created = db.table("stock_items").insert(row).execute()
     return get_one(db, owner_id, created.data[0]["id"])
 
 
