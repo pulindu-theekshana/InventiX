@@ -8,6 +8,7 @@
 
 import type { ComponentProps } from 'react';
 import { Tabs } from 'expo-router';
+import { StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabHeaderButtons } from '../components/TabHeaderButtons';
 import { colors } from '../theme/colors';
@@ -24,6 +25,8 @@ const BAR_PADDING_TOP = 6;
 /** A step up from the navigator's 24pt default. Sized to the room BAR_HEIGHT leaves. */
 export const TAB_ICON_SIZE = 26;
 
+const PILL_RADIUS = 20;
+
 export function useTabScreenOptions(): TabScreenOptions {
   const insets = useSafeAreaInsets();
 
@@ -34,10 +37,15 @@ export function useTabScreenOptions(): TabScreenOptions {
     headerTitleAlign: 'center',
     headerShadowVisible: false,
     headerRight: () => <TabHeaderButtons />,
-    tabBarActiveTintColor: colors.accent,
+    tabBarActiveTintColor: colors.brandInk,
     tabBarInactiveTintColor: colors.textSubtle,
-    /** One step up the type scale from caption, so the labels match the larger icons. */
-    tabBarLabelStyle: { ...text.caption, fontSize: fontSize.sm, lineHeight: 16 },
+    /** The selected tab sits in a soft yellow pill, so where you are reads at a glance. */
+    tabBarActiveBackgroundColor: colors.primaryTint,
+    tabBarItemStyle: { borderRadius: PILL_RADIUS, overflow: 'hidden', marginHorizontal: 6 },
+    /** One step up the type scale from caption, so the labels match the larger icons. Bold when selected. */
+    tabBarLabel: ({ focused, color, children }) => (
+      <Text style={[text.caption, styles.label, { color, fontWeight: focused ? '700' : '500' }]}>{children}</Text>
+    ),
     /**
      * The bar has to clear whatever the operating system owns along the bottom edge: Android's
      * navigation bar, which draws over the app because app.json turns edge to edge on, or the
@@ -55,3 +63,7 @@ export function useTabScreenOptions(): TabScreenOptions {
     sceneStyle: { backgroundColor: colors.background },
   };
 }
+
+const styles = StyleSheet.create({
+  label: { fontSize: fontSize.sm, lineHeight: 16 },
+});
