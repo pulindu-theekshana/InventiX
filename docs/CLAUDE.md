@@ -108,6 +108,16 @@ the second one attach to a channel that has already subscribed, which realtime r
 token's own algorithm — HS256 against the shared secret, ES256/RS256 against the JWKS. Never let a
 token choose a key type it was not signed with.
 
+**Route handlers and dependencies are `def`, never `async def`.** supabase-py is blocking. Inside
+`async def` it blocks the event loop, so the whole backend serves one request at a time and every
+screen that fires several requests at once crawls. Plain `def` runs in FastAPI's thread pool. Read an
+upload with `file.file.read()`, not `await file.read()`.
+
+**Google sign-in in Expo Go returns to `localhost:3000`.** Supabase's Redirect URLs allow-list did
+not match the `exp://<ip>:8081/--/` address, even entered exactly, so it fell back to the Site URL.
+Workaround for testing: set the Site URL itself to `exp://<laptop ip>:8081/--/` (changes with the
+network). For a real build set it to `inventix://`.
+
 **Upload rows live in memory between steps** (`_pending` in `uploads/service.py`). Editing a backend
 file restarts uvicorn and loses them, so do not edit the backend while someone is mid-upload.
 

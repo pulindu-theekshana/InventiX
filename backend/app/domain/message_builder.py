@@ -94,6 +94,9 @@ def build(
         parts.append("")
 
     if notes and notes.strip():
+        # The app bolds this exact line (frontend/src/components/MessageText.tsx), so the
+        # shop's own words stand out from the generated text. Plain text on every channel.
+        parts.append("Special note:")
         parts.append(notes.strip())
         parts.append("")
 

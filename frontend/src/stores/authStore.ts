@@ -6,6 +6,8 @@
  * Look here when : The app forgets who is signed in.
  */
 
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { AuthProfile } from '../types/api';
 import type { Role } from '../types/database';
@@ -91,6 +93,37 @@ export async function signIn(email: string, password: string): Promise<void> {
 }
 
 /**
+ * Google through Supabase OAuth. The browser returns to the app with the session tokens in the
+ * URL fragment (implicit flow, the supabase-js default). A first-time Google user has an auth
+ * user but no profiles row, so they still need to pick a role and fill in profile-setup.
+ */
+export async function signInWithGoogle(): Promise<'signedIn' | 'needsProfile' | 'cancelled'> {
+  if (!supabase) throw new Error('Supabase is not configured. Use Explore the app instead.');
+  const redirectTo = Linking.createURL('/');
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo, skipBrowserRedirect: true },
+  });
+  if (error) throw error;
+
+  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  if (result.type !== 'success') return 'cancelled';
+
+  // Tokens arrive after '#', errors after '?' — read both.
+  const params = new URLSearchParams(result.url.split(/[?#]/).slice(1).join('&'));
+  const failure = params.get('error_description');
+  if (failure) throw new Error(failure);
+  const access_token = params.get('access_token');
+  const refresh_token = params.get('refresh_token');
+  if (!access_token || !refresh_token) throw new Error('Google sign-in did not return a session.');
+
+  const { data: session, error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
+  if (sessionError || !session.user) throw sessionError ?? new Error('Google sign-in failed.');
+  await loadProfile(session.user.id, session.user.email ?? '');
+  return state.status === 'signedIn' ? 'signedIn' : 'needsProfile';
+}
+
+/**
  * Creates the auth user only. The profiles row carrying `role` is written by the backend
  * (feeds/shared/auth), because a client that can write its own role can grant itself one.
  * Spec 4.2 and 15.2. Until that endpoint exists this leaves the user at profile-setup.
@@ -123,6 +156,12 @@ export async function changePassword(current: string, next: string): Promise<voi
 
   const { error } = await supabase.auth.updateUser({ password: next });
   if (error) throw error;
+}
+
+/** After profile-setup writes the row. Without it the app is signed in to the backend but not to itself until relaunch. */
+export function completeProfile(profile: AuthProfile): void {
+  // pendingRole is left set: clearing it would bounce profile-setup to choose-role before it navigates away. signOut clears it.
+  set({ status: 'signedIn', profile });
 }
 
 export function setPendingRole(role: Role | null): void {

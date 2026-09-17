@@ -19,7 +19,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/profile", response_model=ProfileOut, status_code=status.HTTP_201_CREATED)
-async def create_profile(
+def create_profile(
     body: ProfileSetupIn,
     authorization: Annotated[str | None, Header()] = None,
 ) -> ProfileOut:
@@ -34,5 +34,5 @@ async def create_profile(
 
 
 @router.get("/profile", response_model=ProfileOut)
-async def get_profile(user: CurrentUserDep) -> ProfileOut:
+def get_profile(user: CurrentUserDep) -> ProfileOut:
     return service.get_profile(user.id)

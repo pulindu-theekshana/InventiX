@@ -16,15 +16,15 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
 @router.get("", response_model=list[NotificationOut])
-async def list_notifications(user: CurrentUserDep) -> list[NotificationOut]:
+def list_notifications(user: CurrentUserDep) -> list[NotificationOut]:
     return service.list_for_user(user.db, user.id)
 
 
 @router.post("/{notification_id}/read", status_code=status.HTTP_204_NO_CONTENT)
-async def mark_read(notification_id: str, user: CurrentUserDep) -> None:
+def mark_read(notification_id: str, user: CurrentUserDep) -> None:
     service.mark_read(user.db, user.id, notification_id)
 
 
 @router.post("/device", status_code=status.HTTP_204_NO_CONTENT)
-async def register_device(body: DeviceTokenIn, user: CurrentUserDep) -> None:
+def register_device(body: DeviceTokenIn, user: CurrentUserDep) -> None:
     service.register_device(user.db, user.id, body.fcm_token, body.platform)

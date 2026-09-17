@@ -18,7 +18,7 @@ import { colors } from '../../src/theme/colors';
 import { elevation, radius, spacing } from '../../src/theme/spacing';
 import { text } from '../../src/theme/typography';
 import { toMessage } from '../../src/lib/errors';
-import { signIn, signInDemo } from '../../src/stores/authStore';
+import { signIn, signInDemo, signInWithGoogle } from '../../src/stores/authStore';
 import { useAuth } from '../../src/hooks/useAuth';
 
 export default function Login() {
@@ -27,7 +27,23 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleGoogle() {
+    setGoogleBusy(true);
+    setError(null);
+    try {
+      const outcome = await signInWithGoogle();
+      if (outcome === 'signedIn') router.replace('/');
+      // New Google account: role and business details are still missing.
+      if (outcome === 'needsProfile') router.push({ pathname: '/(auth)/choose-role', params: { google: '1' } });
+    } catch (e) {
+      setError(toMessage(e));
+    } finally {
+      setGoogleBusy(false);
+    }
+  }
 
   async function handleLogin() {
     setBusy(true);
@@ -101,7 +117,15 @@ export default function Login() {
             <View style={styles.rule} />
           </View>
 
-          <Button label="Sign in with Google" variant="outline" icon="logo-google" onPress={() => {}} fullWidth />
+          <Button
+            label="Sign in with Google"
+            variant="outline"
+            icon="logo-google"
+            loading={googleBusy}
+            disabled={demo}
+            onPress={handleGoogle}
+            fullWidth
+          />
 
           {/* Only reachable before Supabase is configured. Lets the UI be walked end to end. */}
           {demo ? (

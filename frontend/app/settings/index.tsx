@@ -6,7 +6,7 @@
  * Look here when : A menu item is missing.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,7 @@ import { text } from '../../src/theme/typography';
 import { initials } from '../../src/lib/format';
 import { useAuth } from '../../src/hooks/useAuth';
 import { signOut } from '../../src/stores/authStore';
+import { supabase } from '../../src/lib/supabase';
 
 const ITEMS: { icon: keyof typeof Ionicons.glyphMap; label: string; route?: string }[] = [
   { icon: 'person-outline', label: 'My profile', route: '/settings/profile' },
@@ -30,6 +31,17 @@ const ITEMS: { icon: keyof typeof Ionicons.glyphMap; label: string; route?: stri
 export default function Settings() {
   const { profile, demo } = useAuth();
   const [busy, setBusy] = useState(false);
+  // Google accounts have no password to change. Null until the session is read, so neither shows early.
+  const [viaGoogle, setViaGoogle] = useState<boolean | null>(demo ? false : null);
+
+  useEffect(() => {
+    supabase?.auth.getSession().then(({ data }) => {
+      const providers = (data.session?.user.app_metadata.providers as string[] | undefined) ?? [];
+      setViaGoogle(!providers.includes('email'));
+    });
+  }, []);
+
+  const items = ITEMS.filter((item) => item.route !== '/settings/password' || viaGoogle === false);
 
   async function handleSignOut() {
     setBusy(true);
@@ -59,11 +71,12 @@ export default function Settings() {
             tone="neutral"
           />
         ) : null}
+        {viaGoogle ? <Badge label="Signed in with Google" tone="neutral" /> : null}
         {demo ? <Badge label="Sample data" tone="info" /> : null}
       </View>
 
       <Card padded={false} style={styles.list}>
-        {ITEMS.map((item, i) => (
+        {items.map((item, i) => (
           <View key={item.label}>
             <Card
               level={0}
@@ -74,7 +87,7 @@ export default function Settings() {
               <Text style={[text.body, styles.flex]}>{item.label}</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
             </Card>
-            {i < ITEMS.length - 1 ? <View style={styles.rule} /> : null}
+            {i < items.length - 1 ? <View style={styles.rule} /> : null}
           </View>
         ))}
       </Card>
