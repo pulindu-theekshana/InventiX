@@ -1,7 +1,7 @@
 /**
  * Stocks home
  * 
- * Purpose : One scrolling screen, as spec 6.1 describes it: smart dashboard, then In stock, then Low stock. Not tabs. A floating button adds a product and the header offers the sales upload.
+ * Purpose : Smart dashboard, then Low stock and In stock as two tabs. Spec 6.1 has them as one scrolling list; tabs replaced it so a long In stock list no longer buries what needs ordering. A floating button adds a product.
  * Spec    : Section 6.1
  * Look here when : The home screen renders wrongly.
  */
@@ -17,6 +17,7 @@ import { EmptyState } from '../../../src/components/EmptyState';
 import { ErrorBanner } from '../../../src/components/ErrorBanner';
 import { Input } from '../../../src/components/ui/Input';
 import { Card } from '../../../src/components/ui/Card';
+import { Tabs } from '../../../src/components/ui/Tabs';
 import { colors } from '../../../src/theme/colors';
 import { elevation, radius, spacing } from '../../../src/theme/spacing';
 import { text } from '../../../src/theme/typography';
@@ -37,6 +38,8 @@ export default function StocksHome() {
   const submit = useSubmit();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<StockStatus | null>(null);
+  /** Low stock first: it is the tab that needs action. */
+  const [tab, setTab] = useState<'low' | 'in'>('low');
 
   const items = stocks.data ?? [];
 
@@ -164,7 +167,15 @@ export default function StocksHome() {
             ))}
 
             {summary.data ? (
-              <StockStatusChart summary={summary.data} selected={filter} onSelect={setFilter} />
+              <StockStatusChart
+                summary={summary.data}
+                selected={filter}
+                onSelect={(status) => {
+                  setFilter(status);
+                  // A slice's items live on one tab; show that tab rather than an empty one.
+                  if (status) setTab(status === 'in_stock' ? 'in' : 'low');
+                }}
+              />
             ) : null}
 
             {/*
@@ -188,42 +199,58 @@ export default function StocksHome() {
               containerStyle={styles.search}
             />
 
-            {/* Spec 6.4 — Low stock first, because it is the section that needs action. */}
-            <Section title="Low stock" count={low.length} tone={colors.warning} />
+            <Tabs
+              options={[
+                { value: 'low', label: `Low stock (${low.length})` },
+                { value: 'in', label: `In stock (${inStock.length})` },
+              ]}
+              value={tab}
+              onChange={setTab}
+            />
 
-            {groups.map(([supplierName, list]) => (
-              <Card key={supplierName} onPress={() => openRestock(list)} style={styles.group}>
-                <View style={styles.groupRow}>
-                  <Ionicons name="albums-outline" size={20} color={colors.accent} />
-                  <Text style={[text.bodyStrong, styles.flex]}>
-                    Order {list.length} items from {supplierName}
-                  </Text>
-                  <Ionicons name="chevron-forward" size={18} color={colors.accent} />
-                </View>
-              </Card>
-            ))}
+            {tab === 'low' ? (
+              <View style={styles.list}>
+                {/* Spec 6.4 — one grouped order when several low items share a supplier. */}
+                {groups.map(([supplierName, list]) => (
+                  <Card key={supplierName} onPress={() => openRestock(list)} style={styles.group}>
+                    <View style={styles.groupRow}>
+                      <Ionicons name="albums-outline" size={20} color={colors.accent} />
+                      <Text style={[text.bodyStrong, styles.flex]}>
+                        Order {list.length} items from {supplierName}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={18} color={colors.accent} />
+                    </View>
+                  </Card>
+                ))}
 
-            {low.length === 0 ? (
-              <Text style={[text.label, styles.none]}>Nothing is low. </Text>
+                {low.length === 0 ? (
+                  <Text style={[text.label, styles.none]}>Nothing is low.</Text>
+                ) : (
+                  low.map((item) => (
+                    <StockRow
+                      key={item.id}
+                      item={item}
+                      onPress={() => router.push(`/(customer)/stocks/${item.id}`)}
+                      onRestock={() => openRestock([item])}
+                    />
+                  ))
+                )}
+              </View>
             ) : (
-              low.map((item) => (
-                <StockRow
-                  key={item.id}
-                  item={item}
-                  onPress={() => router.push(`/(customer)/stocks/${item.id}`)}
-                  onRestock={() => openRestock([item])}
-                />
-              ))
+              <View style={styles.list}>
+                {inStock.length === 0 ? (
+                  <Text style={[text.label, styles.none]}>Nothing in stock matches.</Text>
+                ) : (
+                  inStock.map((item) => (
+                    <StockRow
+                      key={item.id}
+                      item={item}
+                      onPress={() => router.push(`/(customer)/stocks/${item.id}`)}
+                    />
+                  ))
+                )}
+              </View>
             )}
-
-            <Section title="In stock" count={inStock.length} tone={colors.success} />
-            {inStock.map((item) => (
-              <StockRow
-                key={item.id}
-                item={item}
-                onPress={() => router.push(`/(customer)/stocks/${item.id}`)}
-              />
-            ))}
           </>
         )}
       </ScrollView>
@@ -241,16 +268,6 @@ export default function StocksHome() {
   );
 }
 
-function Section({ title, count, tone }: { title: string; count: number; tone: string }) {
-  return (
-    <View style={styles.section}>
-      <View style={[styles.sectionDot, { backgroundColor: tone }]} />
-      <Text style={text.h2}>{title}</Text>
-      <Text style={[text.label, styles.count]}>{count}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxxl * 2 },
@@ -260,15 +277,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   search: { marginBottom: spacing.lg },
-  section: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
-  },
-  sectionDot: { width: 8, height: 8, borderRadius: 4 },
-  count: { color: colors.textSubtle },
+  list: { paddingTop: spacing.md },
   none: { color: colors.textSubtle, marginBottom: spacing.lg },
   group: { marginBottom: spacing.md, backgroundColor: colors.primaryTint },
   groupRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
