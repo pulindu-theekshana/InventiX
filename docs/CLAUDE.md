@@ -113,6 +113,11 @@ token choose a key type it was not signed with.
 screen that fires several requests at once crawls. Plain `def` runs in FastAPI's thread pool. Read an
 upload with `file.file.read()`, not `await file.read()`.
 
+**A Supabase client must not be shared between threads.** Once handlers ran in the thread pool, the
+single cached service client (HTTP/2, one connection) failed about one call in five under load with
+`ReadError` / `ConnectionTerminated`, shown in the app as "Something went wrong on our side".
+`core/supabase.py` keeps one service client per thread. Never put a client back behind `lru_cache`.
+
 **Google sign-in in Expo Go returns to `localhost:3000`.** Supabase's Redirect URLs allow-list did
 not match the `exp://<ip>:8081/--/` address, even entered exactly, so it fell back to the Site URL.
 Workaround for testing: set the Site URL itself to `exp://<laptop ip>:8081/--/` (changes with the

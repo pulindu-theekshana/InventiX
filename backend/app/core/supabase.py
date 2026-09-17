@@ -6,7 +6,7 @@ Spec    : Section 3
 Look here when : Every database call fails, or RLS blocks a call it should not.
 """
 
-from functools import lru_cache
+import threading
 
 from supabase import Client, create_client
 
@@ -24,7 +24,13 @@ class DatabaseNotConfigured(AppError):
         )
 
 
-@lru_cache
+# One service client per worker thread, not one for the whole process. Route handlers run in
+# FastAPI's thread pool, and the client talks HTTP/2 over a single connection that is not safe
+# to share between threads: under concurrent requests about one call in five failed with
+# ReadError or ConnectionTerminated, which the app showed as "Something went wrong on our side".
+_local = threading.local()
+
+
 def service_client() -> Client:
     """
     Bypasses row level security. Use only where the client is *forbidden* to act
@@ -36,7 +42,10 @@ def service_client() -> Client:
     """
     if not settings.database_configured:
         raise DatabaseNotConfigured()
-    return create_client(settings.supabase_url, settings.supabase_service_role_key)
+    client = getattr(_local, "service", None)
+    if client is None:
+        client = _local.service = create_client(settings.supabase_url, settings.supabase_service_role_key)
+    return client
 
 
 def user_client(access_token: str) -> Client:
