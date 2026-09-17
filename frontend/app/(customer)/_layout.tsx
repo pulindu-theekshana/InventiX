@@ -6,9 +6,11 @@
  * Look here when : A tab is missing or in the wrong order.
  */
 
-import { Tabs } from 'expo-router';
+import { Pressable } from 'react-native';
+import { router, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { TAB_ICON_SIZE, useTabScreenOptions } from '../../src/hooks/useTabScreenOptions';
+import { colors } from '../../src/theme/colors';
 
 /** The restock flow: no tab bar to wander off into mid-order. Its stack draws the header. */
 const FOCUSED = {
@@ -53,6 +55,24 @@ export default function CustomerLayout() {
       {/* Reachable, but not tabs. */}
       <Tabs.Screen name="stocks/[id]" options={{ href: null, title: 'Product' }} />
       <Tabs.Screen name="stocks/add" options={{ href: null, title: 'Add product' }} />
+      <Tabs.Screen
+        name="stocks/seasonal"
+        options={{
+          href: null,
+          title: 'Festival stock',
+          // A tab route has no stack to pop, so back names its destination instead of guessing.
+          headerLeft: () => (
+            <Pressable
+              onPress={() => router.navigate('/(customer)/stocks')}
+              accessibilityLabel="Back to Stocks"
+              hitSlop={12}
+              style={{ paddingHorizontal: 16 }}
+            >
+              <Ionicons name="chevron-back" size={26} color={colors.brandInk} />
+            </Pressable>
+          ),
+        }}
+      />
       {/* Its own stack, so back inside the flow behaves. See restock/_layout.tsx. */}
       <Tabs.Screen name="restock" options={{ ...FOCUSED, headerShown: false }} />
       <Tabs.Screen name="stocks/upload/index" options={{ href: null, title: 'Upload sales report' }} />
