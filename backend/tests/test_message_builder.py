@@ -70,11 +70,12 @@ class TestContents:
         )
         assert "Horowpathana" in msg
         assert "08 September 2026" in msg
-        assert "Please call before delivery." in msg
+        assert "Special note:\nPlease call before delivery." in msg
 
     def test_optional_fields_are_absent_when_not_given(self):
         msg = build(shop_name="Shop", supplier_name="Supplier", lines=[line()])
         assert "Preferred delivery" not in msg
+        assert "Special note" not in msg
         assert "Delivery address" not in msg
 
     def test_accepts_an_iso_date_string(self):

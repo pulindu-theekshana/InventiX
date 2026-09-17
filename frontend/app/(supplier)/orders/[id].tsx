@@ -16,6 +16,7 @@ import { Badge } from '../../../src/components/ui/Badge';
 import { Modal } from '../../../src/components/ui/Modal';
 import { StageProgress } from '../../../src/components/StageProgress';
 import { ErrorBanner } from '../../../src/components/ErrorBanner';
+import { MessageText } from '../../../src/components/MessageText';
 import { colors } from '../../../src/theme/colors';
 import { radius, spacing } from '../../../src/theme/spacing';
 import { fontFamily, fontSize, text } from '../../../src/theme/typography';
@@ -124,7 +125,7 @@ export default function SupplierOrderDetail() {
 
         <Card style={styles.gap}>
           <Text style={text.title}>Their message</Text>
-          <Text style={[text.caption, styles.message]}>{o.message_body}</Text>
+          <MessageText style={[text.caption, styles.message]} body={o.message_body} />
         </Card>
 
         {o.rating ? (

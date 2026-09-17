@@ -17,6 +17,7 @@ import { StageProgress } from '../../../src/components/StageProgress';
 import { RatingPrompt } from '../../../src/components/RatingPrompt';
 import { ConfirmReceiptPrompt } from '../../../src/components/ConfirmReceiptPrompt';
 import { ErrorBanner } from '../../../src/components/ErrorBanner';
+import { MessageText } from '../../../src/components/MessageText';
 import { colors } from '../../../src/theme/colors';
 import { radius, spacing } from '../../../src/theme/spacing';
 import { text } from '../../../src/theme/typography';
@@ -112,7 +113,7 @@ export default function OrderDetail() {
 
         <Card style={styles.gap}>
           <Text style={text.title}>Message sent</Text>
-          <Text style={[text.caption, styles.message]}>{o.message_body}</Text>
+          <MessageText style={[text.caption, styles.message]} body={o.message_body} />
         </Card>
 
         {/* Spec 12.3 — what you told them, kept visible so it is not given twice. */}
