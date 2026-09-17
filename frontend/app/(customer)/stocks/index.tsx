@@ -35,6 +35,7 @@ export default function StocksHome() {
   const [filter, setFilter] = useState<StockStatus | null>(null);
   /** Low stock first: it is the tab that needs action. */
   const [tab, setTab] = useState<'low' | 'in'>('low');
+  const [fabOpen, setFabOpen] = useState(false);
 
   const items = stocks.data ?? [];
   /** The backend sends them soonest first. */
@@ -152,11 +153,14 @@ export default function StocksHome() {
               that could actually use it.
             */}
             <Card onPress={() => router.push('/(customer)/stocks/upload')} style={styles.uploadRow}>
-              <Ionicons name="cloud-upload-outline" size={20} color={colors.accent} />
-              <Text style={[text.label, styles.flex, { color: colors.accent }]}>
-                Upload a sales report
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+              <View style={styles.uploadIcon}>
+                <Ionicons name="cloud-upload-outline" size={22} color={colors.onAccent} />
+              </View>
+              <View style={styles.flex}>
+                <Text style={[text.bodyStrong, { color: colors.brandInk }]}>Upload a sales report</Text>
+                <Text style={[text.caption, styles.muted]}>Update your stock from your POS in one go</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.accent} />
             </Card>
 
             <Input
@@ -223,16 +227,63 @@ export default function StocksHome() {
         )}
       </ScrollView>
 
-      {/* Spec 6.1 — a floating action button for Add product. */}
+      {/*
+        Spec 6.1's floating button, opening to both ways products get in. Each option carries a
+        label: a lone cloud icon does not say "sales report" to anyone.
+      */}
+      {fabOpen ? (
+        <Pressable style={styles.scrim} onPress={() => setFabOpen(false)} accessibilityLabel="Close menu" />
+      ) : null}
+      {fabOpen ? (
+        <View style={styles.fabMenu}>
+          <FabOption
+            icon="cloud-upload-outline"
+            label="Upload sales report"
+            onPress={() => {
+              setFabOpen(false);
+              router.push('/(customer)/stocks/upload');
+            }}
+          />
+          <FabOption
+            icon="cube-outline"
+            label="Add product"
+            onPress={() => {
+              setFabOpen(false);
+              router.push('/(customer)/stocks/add');
+            }}
+          />
+        </View>
+      ) : null}
       <Pressable
         style={[styles.fab, elevation(3)]}
-        onPress={() => router.push('/(customer)/stocks/add')}
-        accessibilityLabel="Add product"
+        onPress={() => setFabOpen((v) => !v)}
+        accessibilityLabel={fabOpen ? 'Close menu' : 'Add products'}
       >
-        <Ionicons name="add" size={28} color={colors.onAccent} />
+        <Ionicons name={fabOpen ? 'close' : 'add'} size={28} color={colors.onAccent} />
       </Pressable>
 
     </View>
+  );
+}
+
+function FabOption({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={styles.fabOption} accessibilityRole="button" accessibilityLabel={label}>
+      <View style={[styles.fabLabel, elevation(2)]}>
+        <Text style={[text.label, { color: colors.brandInk }]}>{label}</Text>
+      </View>
+      <View style={[styles.fabMini, elevation(2)]}>
+        <Ionicons name={icon} size={22} color={colors.onAccent} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -242,7 +293,17 @@ const styles = StyleSheet.create({
   uploadRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
+    backgroundColor: colors.primaryTint,
+    marginBottom: spacing.lg,
+  },
+  uploadIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   search: { marginBottom: spacing.lg },
   list: { paddingTop: spacing.md },
@@ -266,6 +327,29 @@ const styles = StyleSheet.create({
     bottom: spacing.lg,
     width: 58,
     height: 58,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.25)' },
+  fabMenu: {
+    position: 'absolute',
+    right: spacing.lg + 5,
+    bottom: spacing.lg + 58 + spacing.md,
+    gap: spacing.md,
+    alignItems: 'flex-end',
+  },
+  fabOption: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  fabLabel: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  fabMini: {
+    width: 48,
+    height: 48,
     borderRadius: radius.pill,
     backgroundColor: colors.accent,
     alignItems: 'center',
