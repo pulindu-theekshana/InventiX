@@ -19,12 +19,14 @@ import { text } from '../../../src/theme/typography';
 import { STAGE, SUPPLIER_ADVANCE } from '../../../src/constants/stages';
 import { useSupplierOrders } from '../../../src/hooks/useOrders';
 import { useRealtime } from '../../../src/hooks/useRealtime';
+import { useSubmit } from '../../../src/hooks/useSubmit';
 import { SUPPLIER_QUEUE, type OrderStatus } from '../../../src/types/orderStatus';
 import { advanceStage, markDelivered } from '../../../src/api/orders';
 
 export default function SupplierDelivery() {
   const orders = useSupplierOrders();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const submit = useSubmit();
 
   useRealtime('orders', null, orders.refresh);
 
@@ -48,11 +50,13 @@ export default function SupplierDelivery() {
     /**
      * Spec 11.3 — on_the_way has no next status. Marking delivered records a timestamp and
      * notifies the customer; only the customer can complete the order.
+     *
+     * Through useSubmit so a failed request shows its reason and releases the button.
+     * Awaited bare, a dropped connection left the spinner running for ever.
      */
-    if (step.next) await advanceStage(id, step.next);
-    else await markDelivered(id);
+    const ok = await submit.run(() => (step.next ? advanceStage(id, step.next) : markDelivered(id)));
     setBusyId(null);
-    orders.refresh();
+    if (ok) orders.refresh();
   }
 
   return (
@@ -61,6 +65,7 @@ export default function SupplierDelivery() {
       refreshControl={<RefreshControl refreshing={orders.refreshing} onRefresh={orders.refresh} />}
     >
       <ErrorBanner message={orders.error} />
+      <ErrorBanner message={submit.error} />
 
       {groups.length === 0 ? (
         <EmptyState
@@ -79,25 +84,30 @@ export default function SupplierDelivery() {
               <Text style={[text.label, styles.count]}>{g.items.length}</Text>
             </View>
 
-            {g.items.map((o) => (
-              <OrderCard
-                key={o.id}
-                order={o}
-                showProgress={false}
-                onPress={() => router.push(`/(supplier)/orders/${o.id}`)}
-                action={
-                  <Button
-                    label={SUPPLIER_ADVANCE[o.status]?.action ?? 'Advance'}
-                    variant={o.status === 'on_the_way' ? 'send' : 'accent'}
-                    size="sm"
-                    icon={o.status === 'on_the_way' ? 'checkmark-done' : 'arrow-forward'}
-                    loading={busyId === o.id}
-                    onPress={() => advance(o.id, o.status)}
-                    fullWidth
-                  />
-                }
-              />
-            ))}
+            {g.items.map((o) => {
+              // Spec 11.3: still on_the_way until the customer confirms, so the timestamp is
+              // the only sign it was marked. Without this the button looked like nothing happened.
+              const delivered = o.status === 'on_the_way' && Boolean(o.supplier_marked_delivered_at);
+              return (
+                <OrderCard
+                  key={o.id}
+                  order={o}
+                  showProgress={false}
+                  onPress={() => router.push(`/(supplier)/orders/${o.id}`)}
+                  action={
+                    <Button
+                      label={delivered ? 'Marked as delivered' : SUPPLIER_ADVANCE[o.status]?.action ?? 'Advance'}
+                      variant={delivered ? 'done' : o.status === 'on_the_way' ? 'send' : 'accent'}
+                      size="sm"
+                      icon={o.status === 'on_the_way' ? 'checkmark-done' : 'arrow-forward'}
+                      loading={busyId === o.id}
+                      onPress={() => advance(o.id, o.status)}
+                      fullWidth
+                    />
+                  }
+                />
+              );
+            })}
           </View>
         ))
       )}

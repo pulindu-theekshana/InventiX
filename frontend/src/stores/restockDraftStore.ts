@@ -65,20 +65,21 @@ export function editMessage(text: string) {
   emit();
 }
 
-export function setQuantity(stockItemId: string, quantity: number) {
+/** Lines are keyed by catalog product: one per product per order, and a new product has no stock item. */
+export function setQuantity(catalogProductId: string, quantity: number) {
   if (!draft) return;
   draft = {
     ...draft,
     lines: draft.lines.map((l) =>
-      l.stock_item_id === stockItemId ? { ...l, quantity_requested: quantity } : l,
+      l.catalog_product_id === catalogProductId ? { ...l, quantity_requested: quantity } : l,
     ),
   };
   emit();
 }
 
-export function removeLine(stockItemId: string) {
+export function removeLine(catalogProductId: string) {
   if (!draft) return;
-  draft = { ...draft, lines: draft.lines.filter((l) => l.stock_item_id !== stockItemId) };
+  draft = { ...draft, lines: draft.lines.filter((l) => l.catalog_product_id !== catalogProductId) };
   emit();
 }
 

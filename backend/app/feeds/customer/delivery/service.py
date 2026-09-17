@@ -24,7 +24,7 @@ SELECT = (
     "confirmed_at, rejected_at, cancelled_at, processing_at, put_to_delivery_at, "
     "on_the_way_at, purchased_at, "
     "supplier:profiles!orders_supplier_id_fkey(business_name, city, phone, address), "
-    "order_items(catalog_product_id, quantity_requested, unit_price_at_order, "
+    "order_items(stock_item_id, catalog_product_id, quantity_requested, unit_price_at_order, "
     "product_catalog!inner(name, pack_size))"
 )
 
@@ -125,16 +125,9 @@ def confirm_receipt(db, customer_id: str, order_id: str) -> None:
     sm.assert_transition(row["status"], sm.PURCHASED, "customer")
 
     for item in row.get("order_items") or []:
-        stock_item = (
-            db.table("order_items").select("stock_item_id")
-            .eq("order_id", order_id)
-            .eq("catalog_product_id", item["catalog_product_id"])
-            .single().execute()
-        )
-        sid = stock_item.data["stock_item_id"]
-        # Through domain/stock so the top-up and its audit row commit together.
-        stock.apply(db, sid, item["quantity_requested"], "order_received", customer_id, order_id)
-        db.table("stock_items").update({"restock_requested": False}).eq("id", sid).execute()
+        # Through domain/stock so the top-up and its audit row commit together, and a
+        # product ordered new gets its stock row here.
+        stock.receive(db, customer_id, row["supplier_id"], order_id, item)
 
     _set_status(db, order_id, sm.PURCHASED)
 
@@ -199,11 +192,8 @@ def cancel(db, customer_id: str, order_id: str) -> None:
     row = _get_row(db, customer_id, order_id)
     sm.assert_transition(row["status"], sm.CANCELLED, "customer")
 
-    ids = [
-        i["stock_item_id"]
-        for i in (db.table("order_items").select("stock_item_id")
-                  .eq("order_id", order_id).execute().data or [])
-    ]
+    # A product ordered new has no stock row yet, so nothing to clear for it.
+    ids = [i["stock_item_id"] for i in (row.get("order_items") or []) if i["stock_item_id"]]
     if ids:
         db.table("stock_items").update({"restock_requested": False}).in_("id", ids).execute()
 

@@ -133,7 +133,8 @@ export interface OrderDetailView extends OrderSummary {
 
 /** Spec 6.5 — everything the restock popup needs, in one payload. */
 export interface RestockLine {
-  stock_item_id: string;
+  /** Null for a product the shop has never stocked, ordered from the Suppliers feed. */
+  stock_item_id: string | null;
   catalog_product_id: string;
   name: string;
   pack_size: string;

@@ -9,12 +9,21 @@ Look here when : A validation message does not reach the app, or the send body i
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class OrderLineIn(BaseModel):
-    stock_item_id: str
+    # A reorder names the shop's stock item. A product the shop has never stocked,
+    # ordered from the Suppliers feed, names the catalog product instead.
+    stock_item_id: str | None = None
+    catalog_product_id: str | None = None
     quantity: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _names_a_product(self):
+        if not self.stock_item_id and not self.catalog_product_id:
+            raise ValueError("Each line needs a stock_item_id or a catalog_product_id.")
+        return self
 
 
 class GenerateMessageIn(BaseModel):
