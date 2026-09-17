@@ -197,7 +197,8 @@ def reject(db, supplier_id: str, order_id: str, reason: str) -> None:
     row = _get_row(db, supplier_id, order_id)
     sm.assert_transition(row["status"], sm.REJECTED, "supplier")
 
-    ids = [i["stock_item_id"] for i in (row.get("order_items") or [])]
+    # A product ordered new has no stock row yet, so nothing to clear for it.
+    ids = [i["stock_item_id"] for i in (row.get("order_items") or []) if i["stock_item_id"]]
     if ids:
         db.table("stock_items").update({"restock_requested": False}).in_("id", ids).execute()
 

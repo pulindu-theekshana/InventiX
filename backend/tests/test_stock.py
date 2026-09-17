@@ -115,3 +115,57 @@ class TestValidateAdjustment:
         assert stock.ALL_REASONS == {
             "sales_upload", "manual", "order_received", "damage", "correction",
         }
+
+
+class _Recorder:
+    """Chainable stand-in for the supabase client that records writes. Every query finds `found`."""
+
+    def __init__(self, found=None):
+        self.found, self.calls, self._pending = found, [], None
+
+    def table(self, name):
+        self._pending = name
+        return self
+
+    def rpc(self, name, params):
+        self.calls.append(("rpc", name, params))
+        return self
+
+    def insert(self, row):
+        self.calls.append(("insert", self._pending, row))
+        return self
+
+    def update(self, patch):
+        self.calls.append(("update", self._pending, patch))
+        return self
+
+    def __getattr__(self, _):  # select, eq, maybe_single ...
+        return lambda *a, **k: self
+
+    def execute(self):
+        last = self.calls[-1][0] if self.calls else None
+        data = [{"id": "new-row"}] if last == "insert" else self.found
+        return type("Result", (), {"data": data})()
+
+
+NEW_LINE = {"stock_item_id": None, "catalog_product_id": "p1", "quantity_requested": 24}
+
+
+class TestReceive:
+    """A product ordered new gets its stock row on arrival, not on order."""
+
+    def test_new_product_creates_the_row_then_tops_it_up(self):
+        db = _Recorder(found=None)
+        stock.receive(db, "shop", "supplier", "order", dict(NEW_LINE))
+        insert = next(c for c in db.calls if c[0] == "insert")
+        assert insert[2] == {"owner_id": "shop", "catalog_product_id": "p1",
+                             "preferred_supplier_id": "supplier"}
+        rpc = next(c for c in db.calls if c[0] == "rpc")
+        assert rpc[2]["p_stock_item_id"] == "new-row"
+        assert rpc[2]["p_change"] == 24
+
+    def test_existing_row_is_reused_not_duplicated(self):
+        db = _Recorder(found={"id": "held"})
+        stock.receive(db, "shop", "supplier", "order", dict(NEW_LINE))
+        assert not any(c[0] == "insert" for c in db.calls)
+        assert next(c for c in db.calls if c[0] == "rpc")[2]["p_stock_item_id"] == "held"

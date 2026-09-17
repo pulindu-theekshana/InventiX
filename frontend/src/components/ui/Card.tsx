@@ -13,13 +13,14 @@ import { elevation, radius, spacing } from '../../theme/spacing';
 interface Props {
   children: React.ReactNode;
   onPress?: () => void;
+  onLongPress?: () => void;
   /** 0 flattens the card, for rows inside an already-elevated container. */
   level?: 0 | 1 | 2;
   padded?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
-export function Card({ children, onPress, level = 1, padded = true, style }: Props) {
+export function Card({ children, onPress, onLongPress, level = 1, padded = true, style }: Props) {
   const body = [
     styles.card,
     padded && styles.padded,
@@ -33,6 +34,7 @@ export function Card({ children, onPress, level = 1, padded = true, style }: Pro
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       accessibilityRole="button"
       style={({ pressed }) => [...body, pressed && { opacity: 0.9 }]}
     >

@@ -16,7 +16,7 @@ from ..feeds.shared.notifications import service as notify
 log = logging.getLogger(__name__)
 
 SELECT = ("id, reference, customer_id, supplier_id, supplier_marked_delivered_at, "
-          "order_items(stock_item_id, quantity_requested, product_catalog!inner(name))")
+          "order_items(stock_item_id, catalog_product_id, quantity_requested, product_catalog!inner(name))")
 
 
 def run() -> None:
@@ -73,10 +73,7 @@ def _close(db, cutoff) -> None:
         # from delivery speed -- a supplier should not be credited for a delivery
         # nobody actually verified.
         for item in order.get("order_items") or []:
-            stock.apply(db, item["stock_item_id"], item["quantity_requested"],
-                        "order_received", order["customer_id"], order["id"])
-            db.table("stock_items").update({"restock_requested": False}) \
-              .eq("id", item["stock_item_id"]).execute()
+            stock.receive(db, order["customer_id"], order["supplier_id"], order["id"], item)
 
         db.table("orders").update({
             "status": "purchased",

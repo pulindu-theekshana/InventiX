@@ -31,13 +31,21 @@ interface Props {
   rank?: number;
   /** Selection mode from the restock popup, spec 9.3. */
   selectionMode?: boolean;
+  /** Held down: the Suppliers feed shows the supplier's basic details. */
+  onLongPress?: () => void;
+  /** Outlined, for the supplier picked when ordering a new product. */
+  selected?: boolean;
 }
 
-export function SupplierRow({ supplier, onPress, rank, selectionMode = false }: Props) {
+export function SupplierRow({ supplier, onPress, rank, selectionMode = false, onLongPress, selected = false }: Props) {
   const cannotMeet = selectionMode && supplier.can_meet_quantity === false;
 
   return (
-    <Card onPress={onPress} style={[styles.card, cannotMeet && styles.dimmed]}>
+    <Card
+      onPress={onPress}
+      onLongPress={onLongPress}
+      style={[styles.card, cannotMeet && styles.dimmed, selected && styles.selected]}
+    >
       <View style={styles.header}>
         {rank !== undefined ? (
           <View style={styles.rank}>
@@ -134,6 +142,7 @@ function Stat({
 const styles = StyleSheet.create({
   card: { marginBottom: spacing.md, gap: spacing.md },
   dimmed: { opacity: 0.72 },
+  selected: { borderWidth: 2, borderColor: colors.accent },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   rank: { width: 20, alignItems: 'center' },
   rankText: { color: colors.textSubtle },

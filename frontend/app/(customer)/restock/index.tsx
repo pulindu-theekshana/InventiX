@@ -144,7 +144,7 @@ export default function Restock() {
           const underMinimum =
             line.min_order_quantity !== null && line.quantity_requested < line.min_order_quantity;
           return (
-            <View key={line.stock_item_id} style={styles.line}>
+            <View key={line.catalog_product_id} style={styles.line}>
               <View style={styles.lineText}>
                 <Text style={text.bodyStrong} numberOfLines={1}>
                   {line.name}
@@ -169,7 +169,7 @@ export default function Restock() {
               <TextInput
                 value={String(line.quantity_requested)}
                 onChangeText={(v) =>
-                  draftStore.setQuantity(line.stock_item_id, Number(v.replace(/[^0-9]/g, '')) || 0)
+                  draftStore.setQuantity(line.catalog_product_id, Number(v.replace(/[^0-9]/g, '')) || 0)
                 }
                 keyboardType="number-pad"
                 style={[styles.qty, (overAvailable || underMinimum) && styles.qtyBad]}
@@ -178,7 +178,7 @@ export default function Restock() {
               {/* Spec 6.5: a remove control on each line, in multi-item mode only. */}
               {multi ? (
                 <Pressable
-                  onPress={() => draftStore.removeLine(line.stock_item_id)}
+                  onPress={() => draftStore.removeLine(line.catalog_product_id)}
                   hitSlop={8}
                   accessibilityLabel={'Remove ' + line.name}
                 >

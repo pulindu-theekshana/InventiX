@@ -92,6 +92,14 @@ class TestGrammar:
         msg = build(shop_name="Shop", supplier_name="Supplier", lines=[line(), line(name="Sugar")])
         assert "items have fallen" in msg
 
+    def test_first_order_is_not_called_a_reorder(self):
+        msg = build(shop_name="Shop", supplier_name="Supplier",
+                    lines=[line(current_quantity=None)], first_order=True)
+        assert "first order from Shop" in msg
+        assert "reorder" not in msg
+        assert "fallen below" not in msg
+        assert "Current stock" not in msg
+
 
 class TestEditDetection:
     """

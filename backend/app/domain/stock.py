@@ -85,6 +85,36 @@ def validate_adjustment(quantity_on_hand: int, change: int, reason: str) -> int:
     return result
 
 
+def receive(db, customer_id: str, supplier_id: str, order_id: str, item: dict) -> None:
+    """
+    One delivered order line: top up stock and clear the restock flag.
+
+    `item` is an order_items row with stock_item_id, catalog_product_id and
+    quantity_requested. A product ordered new from the Suppliers feed has no
+    stock_item_id, so its stock row is created here -- on arrival, not on order,
+    so the Stocks feed never lists a product the shop has not received.
+    Shared by confirm receipt and auto confirmation so both do exactly the same.
+    """
+    stock_item_id = item.get("stock_item_id")
+    if stock_item_id is None:
+        existing = (
+            db.table("stock_items").select("id")
+            .eq("owner_id", customer_id).eq("catalog_product_id", item["catalog_product_id"])
+            .maybe_single().execute()
+        )
+        if existing and existing.data:
+            stock_item_id = existing.data["id"]
+        else:
+            stock_item_id = db.table("stock_items").insert({
+                "owner_id": customer_id,
+                "catalog_product_id": item["catalog_product_id"],
+                "preferred_supplier_id": supplier_id,
+            }).execute().data[0]["id"]
+
+    apply(db, stock_item_id, item["quantity_requested"], "order_received", customer_id, order_id)
+    db.table("stock_items").update({"restock_requested": False}).eq("id", stock_item_id).execute()
+
+
 def apply(db, stock_item_id: str, change: int, reason: str, actor_id: str,
           source_id: str | None = None) -> int:
     """

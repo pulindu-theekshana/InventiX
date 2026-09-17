@@ -24,9 +24,10 @@ OPEN_STATES = ("requested", "confirmed", "processing", "put_to_delivery", "on_th
 log = logging.getLogger(__name__)
 
 
-def _open_orders(db, customer_id: str, stock_item_ids: list[str]) -> dict[str, list[dict]]:
+def _open_orders(db, customer_id: str, product_ids: list[str]) -> dict[str, list[dict]]:
     """
-    Which of these products are already on an order that has not arrived yet.
+    Which of these products are already on an order that has not arrived yet, keyed
+    by catalog product -- a product ordered new has no stock item to key on.
 
     Two queries rather than one join: PostgREST would have to make the orders embed
     inner to filter on its status, and the shape that produces is harder to read
@@ -44,20 +45,77 @@ def _open_orders(db, customer_id: str, stock_item_ids: list[str]) -> dict[str, l
 
     by_order = {o["id"]: o for o in orders}
     rows = (
-        db.table("order_items").select("order_id, stock_item_id")
-        .in_("order_id", list(by_order)).in_("stock_item_id", stock_item_ids)
+        db.table("order_items").select("order_id, catalog_product_id")
+        .in_("order_id", list(by_order)).in_("catalog_product_id", product_ids)
         .execute().data or []
     )
 
     found: dict[str, list[dict]] = {}
     for row in rows:
         order = by_order[row["order_id"]]
-        found.setdefault(row["stock_item_id"], []).append({
+        found.setdefault(row["catalog_product_id"], []).append({
             "reference": order["reference"],
             "supplier_id": order["supplier_id"],
             "supplier_name": (order.get("supplier") or {}).get("business_name", "another supplier"),
         })
     return found
+
+
+ITEM = "id, quantity_on_hand, catalog_product_id, product_catalog!inner(id, name, pack_size)"
+
+
+def _load_items(db, customer_id: str, lines: list[OrderLineIn]) -> dict[str, dict]:
+    """
+    The products being ordered, keyed by catalog product. Every line leaves here with
+    catalog_product_id set, so the rest of this file never has to ask which kind it is.
+
+    A line naming a catalog product is a product ordered new from the Suppliers feed.
+    If the shop does stock it after all, it is treated as the reorder it really is;
+    otherwise it gets a stand-in with no stock row (id None), which is created on
+    receipt by domain/stock.py.
+    """
+    stock_ids = [line.stock_item_id for line in lines if line.stock_item_id]
+    new_ids = [line.catalog_product_id for line in lines if not line.stock_item_id]
+    rows: list[dict] = []
+
+    if stock_ids:
+        rows = (
+            db.table("stock_items").select(ITEM)
+            .eq("owner_id", customer_id).in_("id", stock_ids).execute().data or []
+        )
+        if len(rows) != len(stock_ids):
+            raise NotFound("One of those products is no longer in your stock.")
+        by_id = {r["id"]: r for r in rows}
+        for line in lines:
+            if line.stock_item_id:
+                line.catalog_product_id = by_id[line.stock_item_id]["catalog_product_id"]
+
+    if new_ids:
+        held = (
+            db.table("stock_items").select(ITEM)
+            .eq("owner_id", customer_id).in_("catalog_product_id", new_ids).execute().data or []
+        )
+        rows += held
+        missing = set(new_ids) - {r["catalog_product_id"] for r in held}
+        if missing:
+            products = (
+                db.table("product_catalog").select("id, name, pack_size")
+                .in_("id", list(missing)).execute().data or []
+            )
+            if len(products) != len(missing):
+                raise NotFound("We could not find that product.")
+            rows += [
+                {"id": None, "quantity_on_hand": None, "catalog_product_id": p["id"],
+                 "product_catalog": p}
+                for p in products
+            ]
+
+    return {r["catalog_product_id"]: r for r in rows}
+
+
+def _first_order(context: dict) -> bool:
+    """Nothing in this order is in the shop yet, so the message must not call it a reorder."""
+    return all(item["id"] is None for item in context["items"].values())
 
 
 def _load_context(db, customer_id: str, supplier_id: str, lines: list[OrderLineIn]) -> dict:
@@ -73,29 +131,19 @@ def _load_context(db, customer_id: str, supplier_id: str, lines: list[OrderLineI
     if not supplier or not supplier.data:
         raise NotFound("We could not find that supplier.")
 
-    ids = [line.stock_item_id for line in lines]
-    items = (
-        db.table("stock_items")
-        .select("id, quantity_on_hand, catalog_product_id, "
-                "product_catalog!inner(id, name, pack_size)")
-        .eq("owner_id", customer_id).in_("id", ids).execute().data or []
-    )
-    if len(items) != len(ids):
-        raise NotFound("One of those products is no longer in your stock.")
-
-    by_item = {i["id"]: i for i in items}
+    items = _load_items(db, customer_id, lines)
     listings = (
         db.table("supplier_listings")
         .select("id, catalog_product_id, unit_price, quantity_available, min_order_quantity")
         .eq("supplier_id", supplier_id).eq("is_active", True)
-        .in_("catalog_product_id", [i["catalog_product_id"] for i in items])
+        .in_("catalog_product_id", list(items))
         .execute().data or []
     )
     return {
         "supplier": supplier.data,
-        "items": by_item,
+        "items": items,
         "listings": {l["catalog_product_id"]: l for l in listings},
-        "open_orders": _open_orders(db, customer_id, ids),
+        "open_orders": _open_orders(db, customer_id, list(items)),
     }
 
 
@@ -113,7 +161,7 @@ def validate(context: dict, lines: list[OrderLineIn]) -> list[str]:
     problems: list[str] = []
 
     for line in lines:
-        item = context["items"][line.stock_item_id]
+        item = context["items"][line.catalog_product_id]
         product = item["product_catalog"]
         listing = context["listings"].get(item["catalog_product_id"])
 
@@ -146,9 +194,9 @@ def duplicate_refusals(context: dict, lines: list[OrderLineIn]) -> list[str]:
     supplier_name = context["supplier"]["business_name"]
     refusals: list[str] = []
     for line in lines:
-        item = context["items"][line.stock_item_id]
+        item = context["items"][line.catalog_product_id]
         product = item["product_catalog"]
-        for open_order in context["open_orders"].get(line.stock_item_id, []):
+        for open_order in context["open_orders"].get(line.catalog_product_id, []):
             if open_order["supplier_id"] == context["supplier"]["id"]:
                 refusals.append(
                     f"{product['name']} {product['pack_size']} is already on order "
@@ -164,9 +212,9 @@ def duplicate_warnings(context: dict, lines: list[OrderLineIn]) -> list[str]:
     """
     warnings: list[str] = []
     for line in lines:
-        item = context["items"][line.stock_item_id]
+        item = context["items"][line.catalog_product_id]
         product = item["product_catalog"]
-        for open_order in context["open_orders"].get(line.stock_item_id, []):
+        for open_order in context["open_orders"].get(line.catalog_product_id, []):
             if open_order["supplier_id"] != context["supplier"]["id"]:
                 warnings.append(
                     f"{product['name']} {product['pack_size']} is already on order "
@@ -179,7 +227,7 @@ def _message_lines(context: dict, lines: list[OrderLineIn]) -> list[message_buil
     """Shared by the preview and the send, so the two can never describe the order differently."""
     built = []
     for line in lines:
-        item = context["items"][line.stock_item_id]
+        item = context["items"][line.catalog_product_id]
         listing = context["listings"].get(item["catalog_product_id"])
         built.append(message_builder.MessageLine(
             name=item["product_catalog"]["name"],
@@ -212,6 +260,7 @@ def generate_message(db, customer: dict, supplier_id: str, lines: list[OrderLine
             delivery_address=customer.get("address"),
             requested_delivery_date=requested_delivery_date,
             notes=notes,
+            first_order=_first_order(context),
         ),
         problems=validate(context, lines),
         warnings=duplicate_warnings(context, lines),
@@ -273,14 +322,15 @@ def send(db, customer: dict, data: SendOrderIn, idempotency_key: str) -> SendOrd
             delivery_address=customer.get("address"),
             requested_delivery_date=data.requested_delivery_date,
             notes=data.notes,
+            first_order=_first_order(context),
         )
 
     payload = []
     for line in data.lines:
-        item = context["items"][line.stock_item_id]
+        item = context["items"][line.catalog_product_id]
         listing = context["listings"][item["catalog_product_id"]]
         payload.append({
-            "stock_item_id": line.stock_item_id,
+            "stock_item_id": item["id"],
             "listing_id": listing["id"],
             "catalog_product_id": item["catalog_product_id"],
             "quantity": line.quantity,

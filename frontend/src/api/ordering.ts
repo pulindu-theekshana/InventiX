@@ -27,10 +27,13 @@ export async function generateMessage(
     const items = lines
       .map((l) => '- ' + l.name + ' ' + l.pack_size + ', requested ' + l.quantity_requested + ' units')
       .join('\n');
+    const firstOrder = lines.every((l) => l.stock_item_id === null);
     const body = [
       'Hi ' + to + ',',
       '',
-      'This is a reorder from ' + shopName + '. The following items have fallen below our minimum threshold and require restocking:',
+      firstOrder
+        ? 'This is a first order from ' + shopName + '. We would like to start stocking the following items:'
+        : 'This is a reorder from ' + shopName + '. The following items have fallen below our minimum threshold and require restocking:',
       '',
       items,
       '',
@@ -56,7 +59,7 @@ export async function generateMessage(
       method: 'POST',
       body: JSON.stringify({
         supplier_id: supplier?.id,
-        lines: lines.map((l) => ({ stock_item_id: l.stock_item_id, quantity: l.quantity_requested })),
+        lines: lines.map(toLineIn),
         notes: extras.notes || null,
         // An emptied date box holds '', which is not a date. Send nothing instead of ''.
         requested_delivery_date: extras.requested_delivery_date || null,
@@ -96,12 +99,14 @@ export async function sendOrder(
       // An emptied date box holds '', which is not a date. Send nothing instead of ''.
       requested_delivery_date: draft.requested_delivery_date || null,
       notes: draft.notes,
-      lines: draft.lines.map((l) => ({
-        stock_item_id: l.stock_item_id,
-        quantity: l.quantity_requested,
-      })),
+      lines: draft.lines.map(toLineIn),
     }),
   });
+}
+
+/** A reorder names the stock item; a product the shop has never stocked names the catalog product. */
+function toLineIn(l: RestockLine) {
+  return { stock_item_id: l.stock_item_id, catalog_product_id: l.catalog_product_id, quantity: l.quantity_requested };
 }
 
 /** A key per popup session. Crypto is not needed; this only has to be unique per attempt. */
