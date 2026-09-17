@@ -84,25 +84,30 @@ export default function SupplierDelivery() {
               <Text style={[text.label, styles.count]}>{g.items.length}</Text>
             </View>
 
-            {g.items.map((o) => (
-              <OrderCard
-                key={o.id}
-                order={o}
-                showProgress={false}
-                onPress={() => router.push(`/(supplier)/orders/${o.id}`)}
-                action={
-                  <Button
-                    label={SUPPLIER_ADVANCE[o.status]?.action ?? 'Advance'}
-                    variant={o.status === 'on_the_way' ? 'send' : 'accent'}
-                    size="sm"
-                    icon={o.status === 'on_the_way' ? 'checkmark-done' : 'arrow-forward'}
-                    loading={busyId === o.id}
-                    onPress={() => advance(o.id, o.status)}
-                    fullWidth
-                  />
-                }
-              />
-            ))}
+            {g.items.map((o) => {
+              // Spec 11.3: still on_the_way until the customer confirms, so the timestamp is
+              // the only sign it was marked. Without this the button looked like nothing happened.
+              const delivered = o.status === 'on_the_way' && Boolean(o.supplier_marked_delivered_at);
+              return (
+                <OrderCard
+                  key={o.id}
+                  order={o}
+                  showProgress={false}
+                  onPress={() => router.push(`/(supplier)/orders/${o.id}`)}
+                  action={
+                    <Button
+                      label={delivered ? 'Marked as delivered' : SUPPLIER_ADVANCE[o.status]?.action ?? 'Advance'}
+                      variant={delivered ? 'done' : o.status === 'on_the_way' ? 'send' : 'accent'}
+                      size="sm"
+                      icon={o.status === 'on_the_way' ? 'checkmark-done' : 'arrow-forward'}
+                      loading={busyId === o.id}
+                      onPress={() => advance(o.id, o.status)}
+                      fullWidth
+                    />
+                  }
+                />
+              );
+            })}
           </View>
         ))
       )}

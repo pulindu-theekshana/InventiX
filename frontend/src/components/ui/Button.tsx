@@ -12,7 +12,8 @@ import { colors } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
 import { text } from '../../theme/typography';
 
-type Variant = 'primary' | 'accent' | 'send' | 'danger' | 'outline' | 'ghost';
+/** `done` is a finished action: its own colours, not grey, and it cannot be pressed. */
+type Variant = 'primary' | 'accent' | 'send' | 'danger' | 'outline' | 'ghost' | 'done';
 type Size = 'sm' | 'md' | 'lg';
 
 interface Props {
@@ -36,6 +37,7 @@ const FILL: Record<Variant, { bg: string; fg: string; border?: string }> = {
   danger: { bg: colors.danger, fg: colors.onAccent },
   outline: { bg: 'transparent', fg: colors.text, border: colors.border },
   ghost: { bg: 'transparent', fg: colors.accent },
+  done: { bg: colors.successBg, fg: colors.success, border: colors.success },
 };
 
 const HEIGHT: Record<Size, number> = { sm: 36, md: 44, lg: 52 };
@@ -54,12 +56,13 @@ export function Button({
 }: Props) {
   const fill = FILL[variant];
   const inactive = disabled || loading;
+  const pressable = !inactive && variant !== 'done';
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: inactive }}
-      onPress={inactive ? undefined : onPress}
+      accessibilityState={{ disabled: !pressable }}
+      onPress={pressable ? onPress : undefined}
       style={({ pressed }) => [
         styles.base,
         {
@@ -67,7 +70,7 @@ export function Button({
           backgroundColor: inactive ? colors.disabled : fill.bg,
           borderWidth: fill.border ? 1 : 0,
           borderColor: fill.border,
-          opacity: pressed && !inactive ? 0.85 : 1,
+          opacity: pressed && pressable ? 0.85 : 1,
           alignSelf: fullWidth ? 'stretch' : 'auto',
         },
         style,
