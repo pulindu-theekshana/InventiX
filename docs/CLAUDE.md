@@ -23,7 +23,7 @@ plus the traps already discovered, so they are not rediscovered one 500 at a tim
 The whole team shares **one** Supabase project. Everyone's app and backend point at it, so a change
 made once is a change for everybody. As of 12 September 2026 it already holds:
 
-- migrations `0001`–`0020`, both files in `functions/`, all of `policies/`
+- migrations `0001`–`0022` (0021 and 0022 were pasted into the SQL editor by hand, then `notify pgrst, 'reload schema';`), both files in `functions/`, all of `policies/`
 - seeds `product_catalog` (36 products), `seasonal_events`, `app_config`
 - `demo_data`: two auth users (`wasantha.kade@inventix.lk` shop, `demo.supplier@inventix.lk`
   supplier), 4 stock items, 4 supplier listings, 2 orders, 1 rating
@@ -112,6 +112,11 @@ token choose a key type it was not signed with.
 `async def` it blocks the event loop, so the whole backend serves one request at a time and every
 screen that fires several requests at once crawls. Plain `def` runs in FastAPI's thread pool. Read an
 upload with `file.file.read()`, not `await file.read()`.
+
+**A Supabase client must not be shared between threads.** Once handlers ran in the thread pool, the
+single cached service client (HTTP/2, one connection) failed about one call in five under load with
+`ReadError` / `ConnectionTerminated`, shown in the app as "Something went wrong on our side".
+`core/supabase.py` keeps one service client per thread. Never put a client back behind `lru_cache`.
 
 **Google sign-in in Expo Go returns to `localhost:3000`.** Supabase's Redirect URLs allow-list did
 not match the `exp://<ip>:8081/--/` address, even entered exactly, so it fell back to the Site URL.

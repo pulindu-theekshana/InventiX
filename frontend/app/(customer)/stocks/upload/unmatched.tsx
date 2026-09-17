@@ -49,9 +49,9 @@ export default function Unmatched() {
     // rather than leaving the button spinning.
     const ok = await submit.run(() => applyUpload(upload ?? 'u-new'));
     if (!ok) return;
-    // replace, not dismissAll: these steps are tab screens, not a modal stack, so there is
-    // nothing to pop and expo-router warns about the unhandled action.
-    router.replace('/(customer)/stocks');
+    // Back to the Stocks list, dropping the three upload steps: back from there must not
+    // reopen an upload that has already been applied.
+    router.dismissTo('/(customer)/stocks');
   }
 
   return (

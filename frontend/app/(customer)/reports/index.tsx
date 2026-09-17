@@ -12,6 +12,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../../src/components/ui/Card';
 import { Button } from '../../../src/components/ui/Button';
+import { Tabs } from '../../../src/components/ui/Tabs';
 import { ErrorBanner } from '../../../src/components/ErrorBanner';
 import { TrendChart } from '../../../src/components/TrendChart';
 import { colors } from '../../../src/theme/colors';
@@ -113,14 +114,14 @@ export default function ReportsHome() {
       ) : null}
 
       {/* Inventory first: it is the half that can produce a report today. */}
-      <View style={styles.tabs}>
-        <TabButton
-          label="Inventory Reports"
-          active={tab === 'inventory'}
-          onPress={() => setTab('inventory')}
-        />
-        <TabButton label="Sales Reports" active={tab === 'sales'} onPress={() => setTab('sales')} />
-      </View>
+      <Tabs
+        options={[
+          { value: 'inventory', label: 'Inventory Reports' },
+          { value: 'sales', label: 'Sales Reports' },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
       {tab === 'inventory' ? (
         <>
@@ -237,29 +238,6 @@ export default function ReportsHome() {
   );
 }
 
-function TabButton({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="tab"
-      accessibilityState={{ selected: active }}
-      style={[styles.tab, active && styles.tabOn]}
-    >
-      <Text style={[text.bodyStrong, { color: active ? colors.accent : colors.textMuted }]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <View style={styles.tile}>
@@ -314,16 +292,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   periodOptionOn: { backgroundColor: colors.surfaceMuted },
-  tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-    marginBottom: -1,
-  },
-  tabOn: { borderBottomColor: colors.accent },
   tiles: { flexDirection: 'row', gap: spacing.sm },
   tile: {
     flex: 1,

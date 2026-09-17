@@ -1,7 +1,7 @@
 /**
  * Stocks home
  * 
- * Purpose : One scrolling screen, as spec 6.1 describes it: smart dashboard, then In stock, then Low stock. Not tabs. A floating button adds a product and the header offers the sales upload.
+ * Purpose : Smart dashboard, then Low stock and In stock as two tabs. Spec 6.1 has them as one scrolling list; tabs replaced it so a long In stock list no longer buries what needs ordering. A floating button adds a product.
  * Spec    : Section 6.1
  * Look here when : The home screen renders wrongly.
  */
@@ -11,20 +11,17 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StockStatusChart } from '../../../src/components/StockStatusChart';
-import { SeasonalCard } from '../../../src/components/SeasonalCard';
 import { StockRow } from '../../../src/components/StockRow';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { ErrorBanner } from '../../../src/components/ErrorBanner';
 import { Input } from '../../../src/components/ui/Input';
 import { Card } from '../../../src/components/ui/Card';
+import { Tabs } from '../../../src/components/ui/Tabs';
 import { colors } from '../../../src/theme/colors';
 import { elevation, radius, spacing } from '../../../src/theme/spacing';
 import { text } from '../../../src/theme/typography';
 import { useSeasonalWarnings, useStockSummary, useStocks } from '../../../src/hooks/useStocks';
-import { useSuppliers } from '../../../src/hooks/useSuppliers';
-import { useSubmit } from '../../../src/hooks/useSubmit';
-import { searchByProduct } from '../../../src/api/suppliers';
-import { generateMessage } from '../../../src/api/ordering';
+import { useOpenRestock } from '../../../src/hooks/useOpenRestock';
 import { useMockData, MOCK_NOTICE } from '../../../src/api/client';
 import * as draftStore from '../../../src/stores/restockDraftStore';
 import type { StockItemView, StockStatus } from '../../../src/types/api';
@@ -33,12 +30,17 @@ export default function StocksHome() {
   const stocks = useStocks();
   const summary = useStockSummary();
   const seasonal = useSeasonalWarnings();
-  const suppliers = useSuppliers('');
-  const submit = useSubmit();
+  const restock = useOpenRestock();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<StockStatus | null>(null);
+  /** Low stock first: it is the tab that needs action. */
+  const [tab, setTab] = useState<'low' | 'in'>('low');
+  const [fabOpen, setFabOpen] = useState(false);
 
   const items = stocks.data ?? [];
+  /** The backend sends them soonest first. */
+  const festivals = seasonal.data ?? [];
+  const nextFestival = festivals[0];
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -77,46 +79,6 @@ export default function StocksHome() {
     }, []),
   );
 
-  async function openRestock(chosen: StockItemView[], suggestedQuantity?: number) {
-    await submit.run(async () => {
-      const supplierName = chosen[0]?.preferred_supplier_name ?? null;
-      let supplier = (suppliers.data ?? []).find((s) => s.business_name === supplierName) ?? null;
-
-      /**
-       * A product the shop has never ordered has no preferred supplier, and the message
-       * cannot be written without one -- the prices, the minimum and the availability all
-       * come from that supplier's listing. The backend returns whoever sells it, best
-       * ranked first (spec 9.1), which is the same choice the Suppliers feed would offer.
-       */
-      if (!supplier && chosen.length === 1) {
-        const ranked = await searchByProduct(chosen[0].product.id);
-        supplier = ranked[0] ?? null;
-      }
-      if (!supplier) {
-        throw new Error(
-          `No supplier on InventiX lists ${chosen[0]?.product.name ?? 'that product'} yet.`,
-        );
-      }
-
-      const lines = chosen.map((item) => ({
-        stock_item_id: item.id,
-        catalog_product_id: item.product.id,
-        name: item.product.name,
-        pack_size: item.product.pack_size,
-        quantity_requested:
-          suggestedQuantity ?? Math.max(item.low_threshold * 2 - item.quantity_on_hand, 1),
-        quantity_available: supplier.listing?.quantity_available ?? null,
-        min_order_quantity: supplier.listing?.min_order_quantity ?? null,
-        // The row price can be a different supplier's cheapest; the order uses this supplier's.
-        unit_price: supplier.listing?.unit_price ?? item.unit_price ?? null,
-      }));
-
-      const { message_body, warnings } = await generateMessage(lines, supplier);
-      draftStore.openDraft(lines, supplier, message_body, warnings);
-      router.push('/(customer)/restock' as never);
-    });
-  }
-
   const loading = stocks.loading || summary.loading;
   const empty = !loading && items.length === 0;
 
@@ -137,7 +99,7 @@ export default function StocksHome() {
       >
         {useMockData ? <ErrorBanner message={MOCK_NOTICE} tone="info" /> : null}
         <ErrorBanner message={stocks.error} />
-        <ErrorBanner message={submit.error} />
+        <ErrorBanner message={restock.error} />
 
         {empty ? (
           <EmptyState
@@ -151,20 +113,38 @@ export default function StocksHome() {
           />
         ) : (
           <>
-            {/* Spec 6.2 — the smart dashboard sits at the top of this same screen. */}
-            {(seasonal.data ?? []).map((w) => (
-              <SeasonalCard
-                key={w.id}
-                warning={w}
-                onProduct={(stockItemId, qty) => {
-                  const item = items.find((i) => i.id === stockItemId);
-                  if (item) openRestock([item], qty);
-                }}
-              />
-            ))}
+            {/*
+              Spec 6.2, folded to one line: a festival can touch a dozen products, and listing
+              them all here pushed Low stock off the screen. The full list is one tap away.
+            */}
+            {nextFestival ? (
+              <Card onPress={() => router.push('/(customer)/stocks/seasonal' as never)} style={styles.festival}>
+                <View style={styles.festivalIcon}>
+                  <Ionicons name="sparkles" size={18} color={colors.accent} />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={text.bodyStrong}>
+                    {nextFestival.name} in {nextFestival.weeks_away} {nextFestival.weeks_away === 1 ? 'week' : 'weeks'}
+                  </Text>
+                  <Text style={[text.caption, styles.muted]}>
+                    {nextFestival.products.length} {nextFestival.products.length === 1 ? 'product' : 'products'} to prepare
+                    {festivals.length > 1 ? ` · +${festivals.length - 1} more` : ''}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.accent} />
+              </Card>
+            ) : null}
 
             {summary.data ? (
-              <StockStatusChart summary={summary.data} selected={filter} onSelect={setFilter} />
+              <StockStatusChart
+                summary={summary.data}
+                selected={filter}
+                onSelect={(status) => {
+                  setFilter(status);
+                  // A slice's items live on one tab; show that tab rather than an empty one.
+                  if (status) setTab(status === 'in_stock' ? 'in' : 'low');
+                }}
+              />
             ) : null}
 
             {/*
@@ -173,11 +153,14 @@ export default function StocksHome() {
               that could actually use it.
             */}
             <Card onPress={() => router.push('/(customer)/stocks/upload')} style={styles.uploadRow}>
-              <Ionicons name="cloud-upload-outline" size={20} color={colors.accent} />
-              <Text style={[text.label, styles.flex, { color: colors.accent }]}>
-                Upload a sales report
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+              <View style={styles.uploadIcon}>
+                <Ionicons name="cloud-upload-outline" size={22} color={colors.onAccent} />
+              </View>
+              <View style={styles.flex}>
+                <Text style={[text.bodyStrong, { color: colors.brandInk }]}>Upload a sales report</Text>
+                <Text style={[text.caption, styles.muted]}>Update your stock from your POS in one go</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.accent} />
             </Card>
 
             <Input
@@ -188,66 +171,119 @@ export default function StocksHome() {
               containerStyle={styles.search}
             />
 
-            {/* Spec 6.4 — Low stock first, because it is the section that needs action. */}
-            <Section title="Low stock" count={low.length} tone={colors.warning} />
+            <Tabs
+              options={[
+                { value: 'low', label: `Low stock (${low.length})` },
+                { value: 'in', label: `In stock (${inStock.length})` },
+              ]}
+              value={tab}
+              onChange={setTab}
+            />
 
-            {groups.map(([supplierName, list]) => (
-              <Card key={supplierName} onPress={() => openRestock(list)} style={styles.group}>
-                <View style={styles.groupRow}>
-                  <Ionicons name="albums-outline" size={20} color={colors.accent} />
-                  <Text style={[text.bodyStrong, styles.flex]}>
-                    Order {list.length} items from {supplierName}
-                  </Text>
-                  <Ionicons name="chevron-forward" size={18} color={colors.accent} />
-                </View>
-              </Card>
-            ))}
+            {tab === 'low' ? (
+              <View style={styles.list}>
+                {/* Spec 6.4 — one grouped order when several low items share a supplier. */}
+                {groups.map(([supplierName, list]) => (
+                  <Card key={supplierName} onPress={() => restock.open(list)} style={styles.group}>
+                    <View style={styles.groupRow}>
+                      <Ionicons name="albums-outline" size={20} color={colors.accent} />
+                      <Text style={[text.bodyStrong, styles.flex]}>
+                        Order {list.length} items from {supplierName}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={18} color={colors.accent} />
+                    </View>
+                  </Card>
+                ))}
 
-            {low.length === 0 ? (
-              <Text style={[text.label, styles.none]}>Nothing is low. </Text>
+                {low.length === 0 ? (
+                  <Text style={[text.label, styles.none]}>Nothing is low.</Text>
+                ) : (
+                  low.map((item) => (
+                    <StockRow
+                      key={item.id}
+                      item={item}
+                      onPress={() => router.push(`/(customer)/stocks/${item.id}`)}
+                      onRestock={() => restock.open([item])}
+                    />
+                  ))
+                )}
+              </View>
             ) : (
-              low.map((item) => (
-                <StockRow
-                  key={item.id}
-                  item={item}
-                  onPress={() => router.push(`/(customer)/stocks/${item.id}`)}
-                  onRestock={() => openRestock([item])}
-                />
-              ))
+              <View style={styles.list}>
+                {inStock.length === 0 ? (
+                  <Text style={[text.label, styles.none]}>Nothing in stock matches.</Text>
+                ) : (
+                  inStock.map((item) => (
+                    <StockRow
+                      key={item.id}
+                      item={item}
+                      onPress={() => router.push(`/(customer)/stocks/${item.id}`)}
+                    />
+                  ))
+                )}
+              </View>
             )}
-
-            <Section title="In stock" count={inStock.length} tone={colors.success} />
-            {inStock.map((item) => (
-              <StockRow
-                key={item.id}
-                item={item}
-                onPress={() => router.push(`/(customer)/stocks/${item.id}`)}
-              />
-            ))}
           </>
         )}
       </ScrollView>
 
-      {/* Spec 6.1 — a floating action button for Add product. */}
+      {/*
+        Spec 6.1's floating button, opening to both ways products get in. Each option carries a
+        label: a lone cloud icon does not say "sales report" to anyone.
+      */}
+      {fabOpen ? (
+        <Pressable style={styles.scrim} onPress={() => setFabOpen(false)} accessibilityLabel="Close menu" />
+      ) : null}
+      {fabOpen ? (
+        <View style={styles.fabMenu}>
+          <FabOption
+            icon="cloud-upload-outline"
+            label="Upload sales report"
+            onPress={() => {
+              setFabOpen(false);
+              router.push('/(customer)/stocks/upload');
+            }}
+          />
+          <FabOption
+            icon="cube-outline"
+            label="Add product"
+            onPress={() => {
+              setFabOpen(false);
+              router.push('/(customer)/stocks/add');
+            }}
+          />
+        </View>
+      ) : null}
       <Pressable
         style={[styles.fab, elevation(3)]}
-        onPress={() => router.push('/(customer)/stocks/add')}
-        accessibilityLabel="Add product"
+        onPress={() => setFabOpen((v) => !v)}
+        accessibilityLabel={fabOpen ? 'Close menu' : 'Add products'}
       >
-        <Ionicons name="add" size={28} color={colors.onAccent} />
+        <Ionicons name={fabOpen ? 'close' : 'add'} size={28} color={colors.onAccent} />
       </Pressable>
 
     </View>
   );
 }
 
-function Section({ title, count, tone }: { title: string; count: number; tone: string }) {
+function FabOption({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
   return (
-    <View style={styles.section}>
-      <View style={[styles.sectionDot, { backgroundColor: tone }]} />
-      <Text style={text.h2}>{title}</Text>
-      <Text style={[text.label, styles.count]}>{count}</Text>
-    </View>
+    <Pressable onPress={onPress} style={styles.fabOption} accessibilityRole="button" accessibilityLabel={label}>
+      <View style={[styles.fabLabel, elevation(2)]}>
+        <Text style={[text.label, { color: colors.brandInk }]}>{label}</Text>
+      </View>
+      <View style={[styles.fabMini, elevation(2)]}>
+        <Ionicons name={icon} size={22} color={colors.onAccent} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -257,28 +293,63 @@ const styles = StyleSheet.create({
   uploadRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
+    backgroundColor: colors.primaryTint,
+    marginBottom: spacing.lg,
+  },
+  uploadIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   search: { marginBottom: spacing.lg },
-  section: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
-  },
-  sectionDot: { width: 8, height: 8, borderRadius: 4 },
-  count: { color: colors.textSubtle },
+  list: { paddingTop: spacing.md },
   none: { color: colors.textSubtle, marginBottom: spacing.lg },
   group: { marginBottom: spacing.md, backgroundColor: colors.primaryTint },
   groupRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   flex: { flex: 1 },
+  muted: { color: colors.textMuted },
+  festival: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
+  festivalIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   fab: {
     position: 'absolute',
     right: spacing.lg,
     bottom: spacing.lg,
     width: 58,
     height: 58,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.25)' },
+  fabMenu: {
+    position: 'absolute',
+    right: spacing.lg + 5,
+    bottom: spacing.lg + 58 + spacing.md,
+    gap: spacing.md,
+    alignItems: 'flex-end',
+  },
+  fabOption: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  fabLabel: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  fabMini: {
+    width: 48,
+    height: 48,
     borderRadius: radius.pill,
     backgroundColor: colors.accent,
     alignItems: 'center',
