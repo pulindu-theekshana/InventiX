@@ -7,8 +7,9 @@
 -- Look here when : The demo shop looks empty, or a product has only one supplier to compare.
 --
 -- BEFORE RUNNING
---   1. Register the shop and four supplier accounts in the app (Register, then profile setup).
---   2. Put their emails in the five lines marked EDIT below.
+--   1. Register four supplier accounts in the app (Register, then profile setup). The shop is
+--      the existing Wasantha Kade account.
+--   2. Put the four supplier emails in the lines marked EDIT below.
 --   3. Paste this whole file into the Supabase SQL editor and run it.
 --
 -- Safe to run twice: every insert skips rows that already exist. It never changes a quantity or
@@ -18,7 +19,7 @@
 create temp table seed_accounts (key text primary key, email text not null, role text not null);
 
 insert into seed_accounts (key, email, role) values
-  ('shop', 'SHOP_EMAIL@example.com',       'customer'),   -- EDIT
+  ('shop', 'wasantha.kade@inventix.lk',    'customer'),   -- the existing demo shop
   ('s1',   'SUPPLIER_1_EMAIL@example.com', 'supplier'),   -- EDIT: cheapest, slowest
   ('s2',   'SUPPLIER_2_EMAIL@example.com', 'supplier'),   -- EDIT: fastest, pricier
   ('s3',   'SUPPLIER_3_EMAIL@example.com', 'supplier'),   -- EDIT: middle of the road
