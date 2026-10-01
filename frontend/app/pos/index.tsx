@@ -123,12 +123,20 @@ export default function Sell() {
    * them. Below it the cashier is not interrupted, which is what makes the limit usable at all.
    */
   function finishPressed() {
-    const limit = settings.current().discount_limit;
-    if (discountValue > limit) {
+    if (settings.needsOwner(discountValue, settings.current().discount_limit)) {
       setApproving('discount');
       return;
     }
     void finish();
+  }
+
+  async function leavePressed() {
+    if (settings.locked()) {
+      setApproving('leave');
+      return;
+    }
+    await shift.end();
+    router.replace('/stocks');
   }
 
   async function finish() {
@@ -179,7 +187,7 @@ export default function Sell() {
           returnKeyType="done"
           containerStyle={styles.flex}
         />
-        <Pressable onPress={() => setApproving('leave')} style={styles.link}>
+        <Pressable onPress={leavePressed} style={styles.link}>
           <Ionicons name="exit-outline" size={20} color={colors.accent} />
           <Text style={[text.caption, { color: colors.accent }]}>Leave</Text>
         </Pressable>

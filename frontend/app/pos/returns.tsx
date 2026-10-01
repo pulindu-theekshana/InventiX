@@ -78,7 +78,7 @@ export default function Returns() {
    */
   function giveBackPressed() {
     if (!bill || !anything) return;
-    if (refund > settings.current().return_limit) {
+    if (settings.needsOwner(refund, settings.current().return_limit)) {
       setApproving(true);
       return;
     }
