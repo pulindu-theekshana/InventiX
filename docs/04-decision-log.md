@@ -260,3 +260,71 @@ runtime can do). Sending base64 in JSON (rejected: changes the endpoint's contra
 payload by a third).
 
 **Affects.** Spec §6.6. `frontend/src/api/uploads.ts`, `frontend/src/api/client.ts`.
+
+
+## D-015 — The till generates its own receipt number, with a device prefix
+
+**Decision.** A POS bill carries `receipt_no` in the form `T1-000147`: a device prefix chosen per
+till, then a counter the till increments itself. Unique per shop in the database
+(`pos_sales.pos_sale_receipt_is_unique_per_shop`).
+
+**Reason.** A till has to keep billing with no internet, so it cannot ask the server for the next
+number. Two tills counting independently would both reach 000147; the prefix is what keeps them
+apart. A customer returning goods quotes this number, so it has to be short enough to read aloud.
+
+**Alternatives.** A server-assigned number (rejected: impossible offline). The internal uuid alone
+(rejected: nobody can read it over a counter). A timestamp (rejected: long, and two sales in the
+same second collide).
+
+**Affects.** Spec §6.6. `database/migrations/0026_pos_sales.sql`, `backend/app/domain/pos.py`.
+
+
+## D-016 — A till sale is recorded, never refused over stock arithmetic
+
+**Decision.** `record_sale` stores the bill as sent. If the quantity sold exceeds what the shop is
+recorded as holding, the bill keeps the real quantity and the stock movement is clamped at zero. A
+product with no stock row is sold and recorded, moving no stock. A stock id belonging to another
+shop **is** refused.
+
+**Reason.** The customer has paid and left. The sale is a record of something that happened, not a
+request for permission, and a till that argues with the cashier about a miscount is a till nobody
+uses. The same clamp already exists for sales uploads. Writing to another shop's stock is not a
+counting error, so that one is still refused.
+
+**Alternatives.** Refusing the sale (rejected: blocks the counter over bookkeeping). Allowing
+negative stock (rejected: every screen would have to explain a negative, and the figure would still
+be wrong).
+
+**Affects.** Spec §6.6. `backend/app/domain/pos.py`, `backend/app/feeds/customer/pos/service.py`.
+
+
+## D-017 — The backend totals the bill, and a resent bill is stored once
+
+**Decision.** The till sends lines; the backend computes line totals, the discount and the bill
+total. Each bill carries a `client_sale_id`, unique per shop, and a repeat send returns the stored
+sale instead of creating a second one.
+
+**Reason.** A client that can name its own total can under-report takings, and a till on a bad
+connection cannot tell a timeout from a failure — so it must be safe to send again. This is the
+guarantee orders already have through `idempotency_key`, enforced by a unique constraint rather
+than by remembering to check.
+
+**Affects.** Spec §6.6 and §15.2. `database/migrations/0026_pos_sales.sql`,
+`backend/app/feeds/customer/pos/service.py`.
+
+
+## D-018 — The POS lives inside the existing app, not in a project of its own
+
+**Decision.** The till screens are a route group, `frontend/app/(pos)/`, beside `(customer)` and
+`(supplier)`. It is delivered to a shop laptop as the web build, installed from Chrome as a PWA.
+
+**Reason.** The till needs the catalog, the API client, login, the theme and the types that already
+exist. A second project means either copying them, which drifts, or npm workspaces, which is
+tooling work before a single sale has been rung up. A route group also keeps a backend change and
+the till change that depends on it in one commit.
+
+**Alternatives.** `Project/pos/` with a shared package (rejected for now: the abstraction would be
+designed on guesses about what the till needs; revisit if the POS becomes a product of its own). A
+packaged desktop app from the start (rejected: only needed for cash-drawer control).
+
+**Affects.** `frontend/app/(pos)/`, `docs/16-pos-system.md`.

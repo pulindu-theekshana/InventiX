@@ -14,6 +14,27 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 
 ---
 
+## 2026-10-01 — Phase 1 of the POS: database and backend
+**Added.** `database/migrations/0025_pos_adjustment_reasons.sql` — `pos_sale` and `return` join the
+closed list of reasons a quantity may change.
+
+**Added.** `database/migrations/0026_pos_sales.sql` — `pos_sales` and `pos_sale_items`, readable by
+their owner and writable only by the backend. `sales_records` now accepts a till sale as well as an
+uploaded one (`source`, `pos_sale_id`, and `upload_id` no longer mandatory), so Reports count both.
+
+**Added.** `backend/app/domain/pos.py` — receipt format, line and bill totals, how far stock may
+move, how much of a line is still returnable. Tested without a database in `tests/test_pos.py`.
+
+**Added.** `backend/app/feeds/customer/pos/` — record a sale, the day's bills, one bill by receipt
+number, and the day-close summary.
+
+**Added.** `docs/16-pos-system.md` — what the till is, where it sits, and the decisions behind it.
+
+**Decisions.** D-015 to D-018.
+
+**Next.** Phase 2 — the till's local storage and its sync queue, so a sale is saved on the device
+before it is sent.
+
 ## 2026-09-13 — Phase 2: Customer side connected to the backend
 **Added.** `frontend/src/hooks/useSubmit.ts` — one place that owns the busy flag and the error
 message for a write, because nine screens awaited a write with no `catch`. See D-011.

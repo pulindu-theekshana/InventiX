@@ -10,6 +10,7 @@ from fastapi import APIRouter
 
 from .feeds.customer.delivery import routes as customer_delivery
 from .feeds.customer.ordering import routes as customer_ordering
+from .feeds.customer.pos import routes as customer_pos
 from .feeds.customer.reports import routes as customer_reports
 from .feeds.customer.stocks import routes as customer_stocks
 from .feeds.customer.suppliers import routes as customer_suppliers
@@ -36,6 +37,7 @@ api_router.include_router(customer_ordering.router)
 api_router.include_router(customer_delivery.router)
 api_router.include_router(customer_uploads.router)
 api_router.include_router(customer_reports.router)
+api_router.include_router(customer_pos.router)
 
 # Supplier feeds, spec 10.
 api_router.include_router(supplier_overview.router)

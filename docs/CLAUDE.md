@@ -138,6 +138,12 @@ file restarts uvicorn and loses them, so do not edit the backend while someone i
 - Prefer fixing the root cause in `service.py` over correcting a number in the app. The app shows
   what the backend sends.
 
+## The POS (being built)
+
+`frontend/app/(pos)/` will be the till; phase 1 (database and backend) is done. A sale is an
+endpoint on this same backend — there is no separate POS API. See `docs/16-pos-system.md` for the
+phases and the decisions. Migrations 0025 and 0026 must be run before any sale can be recorded.
+
 ## Known gaps (not bugs to "fix" silently — they are unbuilt)
 
 - A rating is never saved. `RatingPrompt` collects a score and discards it; there is no endpoint.

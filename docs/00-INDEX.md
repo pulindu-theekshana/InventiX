@@ -12,6 +12,7 @@
 | `08-api-contract.md` | Every endpoint the backend must provide, what it receives and returns, and the rule it enforces. Derived from the frontend, which was built first. | You add, remove or change the shape of an endpoint. |
 | `09-database-build.md` | How the Supabase database is created, in what order, the row level security policies, and the queries the backend runs. | You add a migration, change a policy, or add an index. |
 | `10-connections.md` | How the app, the backend and the database actually talk to each other: the three edges, the two keys, and a traced request through all of them. | You change how a layer reaches another, or move a read between the direct and backend paths. |
+| `16-pos-system.md` | The till: what it is, how it reaches the same backend the app uses, and the decisions behind each phase. | You build another phase of the POS, or change how a sale is recorded. |
 
 ## The maintenance rule
 
