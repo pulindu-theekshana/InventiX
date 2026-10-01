@@ -64,21 +64,31 @@ export default function TillSettings() {
     if (ok) setSaved(true);
   }
 
-  async function saveBasics() {
+  /**
+   * The PIN and the limits save separately. One shared button meant a typed PIN was lost the
+   * moment the owner pressed anything else, and nothing said so.
+   */
+  async function saveOwnerPin() {
     if (!profile) return;
-    if (ownerPin && !isValidPin(ownerPin)) {
+    if (!isValidPin(ownerPin)) {
       setError('A PIN is four to six digits.');
       return;
     }
+    await persist({ ...current, owner_pin_hash: await hashPin(ownerPin, profile.id) });
+    setOwnerPin('');
+  }
+
+  async function removeOwnerPin() {
+    await persist({ ...current, owner_pin_hash: null });
+    setOwnerPin('');
+  }
+
+  async function saveLimits() {
     await persist({
       ...current,
-      owner_pin_hash: ownerPin
-        ? await hashPin(ownerPin, profile.id)
-        : current.owner_pin_hash,
       discount_limit: Number(discount) || 0,
       return_limit: Number(refund) || 0,
     });
-    setOwnerPin('');
   }
 
   async function addCashier() {
@@ -134,20 +144,38 @@ export default function TillSettings() {
       {saved ? <Text style={[text.label, { color: colors.success }]}>Saved.</Text> : null}
 
       <View style={styles.card}>
-        <Text style={text.title}>Your PIN</Text>
+        <Text style={text.title}>Owner PIN — yours</Text>
         <Text style={[text.caption, styles.muted]}>
           {current.owner_pin_hash
-            ? 'A PIN is set. Type a new one to change it.'
-            : 'No PIN yet. Until you set one, the till does not lock.'}
+            ? 'Set. Asked for a big discount, a big refund, leaving the till, and these settings.'
+            : 'Not set, so nothing locks. Set one to turn the guards on.'}
         </Text>
         <Input
           value={ownerPin}
           onChangeText={setOwnerPin}
-          placeholder="4 to 6 digits"
+          placeholder={current.owner_pin_hash ? 'New PIN, 4 to 6 digits' : '4 to 6 digits'}
           keyboardType="number-pad"
           secureTextEntry
           maxLength={6}
         />
+        <View style={styles.row}>
+          {current.owner_pin_hash ? (
+            <Button
+              label="Remove PIN"
+              variant="outline"
+              onPress={removeOwnerPin}
+              style={styles.flex}
+            />
+          ) : null}
+          <Button
+            label={current.owner_pin_hash ? 'Change PIN' : 'Set PIN'}
+            variant="accent"
+            onPress={saveOwnerPin}
+            loading={submit.busy}
+            disabled={!ownerPin}
+            style={styles.flex}
+          />
+        </View>
       </View>
 
       <View style={styles.card}>
@@ -170,30 +198,36 @@ export default function TillSettings() {
           hint={`Now: ${currency(current.return_limit)}`}
         />
         <Button
-          label="Save"
+          label="Save limits"
           variant="accent"
-          onPress={saveBasics}
+          onPress={saveLimits}
           loading={submit.busy}
           fullWidth
         />
       </View>
 
       <View style={styles.card}>
-        <Text style={text.title}>Who works the counter</Text>
+        <Text style={text.title}>Cashiers — your staff</Text>
         <Text style={[text.caption, styles.muted]}>
-          Each person gets a PIN and starts their own shift, so every bill shows who rang it.
+          Each person gets their own PIN and starts their own shift, so every bill shows who rang
+          it. Add someone when they join, remove them when they leave.
         </Text>
+        {current.cashiers.length === 0 ? (
+          <Text style={[text.caption, styles.muted]}>Nobody added yet.</Text>
+        ) : null}
 
         {current.cashiers.map((c) => (
           <View key={c.name} style={styles.person}>
             <Ionicons name="person-circle-outline" size={22} color={colors.textMuted} />
             <Text style={[text.body, styles.flex]}>{c.name}</Text>
-            <Pressable onPress={() => removeCashier(c.name)} hitSlop={8}>
-              <Ionicons name="trash-outline" size={18} color={colors.danger} />
+            <Pressable onPress={() => removeCashier(c.name)} hitSlop={8} style={styles.remove}>
+              <Ionicons name="trash-outline" size={16} color={colors.danger} />
+              <Text style={[text.caption, { color: colors.danger }]}>Remove</Text>
             </Pressable>
           </View>
         ))}
 
+        <Text style={[text.label, { marginTop: spacing.sm }]}>Add a cashier</Text>
         <View style={styles.row}>
           <Input
             value={newName}
@@ -204,7 +238,7 @@ export default function TillSettings() {
           <Input
             value={newPin}
             onChangeText={setNewPin}
-            placeholder="PIN"
+            placeholder="Their PIN"
             keyboardType="number-pad"
             secureTextEntry
             maxLength={6}
@@ -240,4 +274,5 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   row: { flexDirection: 'row', gap: spacing.md },
   person: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  remove: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
 });
