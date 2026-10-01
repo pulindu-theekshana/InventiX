@@ -253,6 +253,21 @@ def record_return(db, owner_id: str, data: ReturnIn) -> SaleOut:
             "catalog_product_id", item["catalog_product_id"]
         ).execute()
 
+    # Sales history, as negative rows: summing quantity_sold then gives what the shop really
+    # sold. Without this a return would restore the stock but leave the sale counted (0027).
+    service_client().table("sales_records").insert([
+        {
+            "source": "pos",
+            "pos_sale_id": ret["id"],
+            "stock_item_id": line["item"].get("stock_item_id"),
+            "catalog_product_id": line["item"]["catalog_product_id"],
+            "quantity_sold": -rules.whole_units(line["quantity"]),
+            "sale_date": data.sold_at.date().isoformat(),
+        }
+        for line in lines
+        if rules.whole_units(line["quantity"]) > 0
+    ]).execute()
+
     # Stock comes back. Through the same audited path, so the shelf and the trail agree.
     for line in lines:
         stock_item_id = line["item"].get("stock_item_id")

@@ -222,6 +222,10 @@ counting.
 **Stock comes back through the same audited path** as every other quantity change, so returned
 goods appear on the shelf and in the history together.
 
+**A return is a negative row in the sales history** (migration 0027). The alternative was a `kind`
+column that every query would have to remember to subtract; a sign means a total is net by
+construction, and a query that forgets cannot overstate what the shop sold.
+
 ---
 
 ## Still to build
@@ -234,8 +238,7 @@ goods appear on the shelf and in the history together.
 ## Known limits
 
 - While a till is offline the owner's phone shows stale stock. It catches up on reconnect.
-- Reports count **gross** sales: a return puts stock back and shows in the day close, but does not
-  subtract from `sales_records`, whose `quantity_sold` cannot be negative. Net sales need either a
-  signed column or a returns table of its own.
+- A return of a weighed item moves whole units in stock and in the sales history, because both
+  count in units. The bill keeps the exact weight.
 - VAT-registered shops (turnover over Rs. 60M a year) will eventually need an IRD-approved
   "secured POS" connected to the national e-invoicing system. A small shop is below that line.

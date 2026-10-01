@@ -24,6 +24,9 @@ sell screen.
 **Changed.** The day summary now splits takings per cashier, ready for phase 5 to put a real person
 behind the label.
 
+**Added.** `database/migrations/0027_sales_records_allow_returns.sql` — a return is stored as a
+negative row in the sales history, so Reports count net sales rather than gross.
+
 **Next.** Phase 5 — cashier PIN at shift start, owner PIN on discounts, returns and leaving the
 till.
 
