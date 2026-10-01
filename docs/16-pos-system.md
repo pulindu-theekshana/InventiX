@@ -186,6 +186,11 @@ of fifteen items stays readable.
 is ready immediately. The header shows "n waiting to sync", which is the only honest way to say the
 backend has not confirmed yet.
 
+**A cash sale cannot be finished until the cashier says what was handed over.** One stray tap used
+to complete a bill. Requiring the tendered amount also makes the change figure real rather than
+optional, and quick buttons (Exact, 500, 1000, 5000) keep it to one tap. Card and "other" need no
+amount, because no change is given.
+
 **The cart total is computed twice**, once here for the cashier and once by the backend, which
 stores its own answer. Not duplication for its own sake: the screen cannot wait for a round trip,
 and the stored total must not be something a client chose.

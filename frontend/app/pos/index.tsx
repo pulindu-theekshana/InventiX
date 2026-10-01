@@ -73,7 +73,15 @@ export default function Sell() {
 
   const discountValue = Number(discount) || 0;
   const total = cart.cartTotal(lines, discountValue);
-  const changeDue = cart.change(total, Number(cashGiven) || 0);
+  const tendered = Number(cashGiven) || 0;
+  const changeDue = cart.change(total, tendered);
+  /**
+   * A cash sale is only finished once the cashier has said what the customer handed over. It
+   * stops a stray tap completing a bill, and it is the only way the screen can show change --
+   * which is the number the customer is watching for.
+   */
+  const shortOfCash = payment === 'cash' && tendered < total;
+  const canFinish = lines.length > 0 && !shortOfCash;
 
   function add(item: StockItemView) {
     setLines((current) => cart.addLine(current, cart.lineOf(item)));
@@ -94,7 +102,7 @@ export default function Sell() {
   }
 
   async function finish() {
-    if (!lines.length) return;
+    if (!canFinish) return;
     setError(null);
     try {
       const receipt_no = await device.nextReceiptNo();
@@ -264,6 +272,23 @@ export default function Sell() {
           />
         </View>
 
+        {payment === 'cash' && lines.length > 0 ? (
+          <View style={styles.row}>
+            {/* The note a customer most often hands over, and "exact" for the rest. */}
+            <Pressable onPress={() => setCashGiven(String(total))} style={styles.quick}>
+              <Text style={text.label}>Exact</Text>
+            </Pressable>
+            {[500, 1000, 5000]
+              .filter((note) => note >= total)
+              .slice(0, 3)
+              .map((note) => (
+                <Pressable key={note} onPress={() => setCashGiven(String(note))} style={styles.quick}>
+                  <Text style={text.label}>{note}</Text>
+                </Pressable>
+              ))}
+          </View>
+        ) : null}
+
         <View style={styles.row}>
           {(['cash', 'card', 'other'] as Payment[]).map((method) => (
             <Pressable
@@ -282,11 +307,16 @@ export default function Sell() {
           <Text style={text.h2}>Total</Text>
           <Text style={text.h2}>{currency(total)}</Text>
         </View>
-        {Number(cashGiven) > 0 ? (
+        {tendered > 0 ? (
           <View style={styles.totals}>
             <Text style={[text.label, styles.muted]}>Change</Text>
             <Text style={[text.bodyStrong, { color: colors.success }]}>{currency(changeDue)}</Text>
           </View>
+        ) : null}
+        {shortOfCash && lines.length > 0 ? (
+          <Text style={[text.caption, { color: colors.textMuted }]}>
+            Enter what the customer handed over to finish this sale.
+          </Text>
         ) : null}
 
         <View style={styles.row}>
@@ -303,7 +333,7 @@ export default function Sell() {
             size="lg"
             icon="checkmark"
             onPress={finish}
-            disabled={!lines.length}
+            disabled={!canFinish}
             style={styles.flexTwo}
           />
         </View>
@@ -378,5 +408,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   payOn: { backgroundColor: colors.primaryTint },
+  quick: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primaryTint,
+  },
   totals: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 });
