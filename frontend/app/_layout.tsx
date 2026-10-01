@@ -57,7 +57,7 @@ export default function RootLayout() {
         <Stack.Screen name="(customer)" options={{ headerShown: false, title: 'Home' }} />
         <Stack.Screen name="(supplier)" options={{ headerShown: false, title: 'Home' }} />
         {/* The till. Its own group: a cashier sees no tabs, no notifications, no menu. */}
-        <Stack.Screen name="(pos)" options={{ headerShown: false }} />
+        <Stack.Screen name="pos" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
         <Stack.Screen name="settings/index" options={{ title: 'Menu' }} />
         <Stack.Screen name="settings/profile" options={{ title: 'My profile' }} />

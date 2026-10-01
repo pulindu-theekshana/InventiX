@@ -1,7 +1,7 @@
 /**
  * Till stack
  *
- * Purpose : The counter screens. Its own group, because a cashier sees only the till: no tabs, no notifications, no menu.
+ * Purpose : The counter screens, at /pos. A plain folder, not a (group): a group adds no path segment, so app/(pos)/index.tsx claimed "/" and opened the till instead of the login screen.
  * Spec    : Section 6.6
  * Look here when : The till shows the shop owner's chrome, or back from a till screen leaves the till.
  */

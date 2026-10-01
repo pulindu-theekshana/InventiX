@@ -46,7 +46,7 @@ export default function Settings() {
   // The till, for a shop that sells over a counter. A supplier has no counter, so it is not
   // offered to them. Spec 6.6; who may open it is phase 5 of docs/16-pos-system.md.
   const menu = profile?.role === 'customer'
-    ? [{ icon: 'calculator-outline' as const, label: 'Open the till', route: '/(pos)' }, ...items]
+    ? [{ icon: 'calculator-outline' as const, label: 'Open the till', route: '/pos' }, ...items]
     : items;
 
   async function handleSignOut() {
