@@ -43,6 +43,12 @@ export default function Settings() {
 
   const items = ITEMS.filter((item) => item.route !== '/settings/password' || viaGoogle === false);
 
+  // The till, for a shop that sells over a counter. A supplier has no counter, so it is not
+  // offered to them. Spec 6.6; who may open it is phase 5 of docs/16-pos-system.md.
+  const menu = profile?.role === 'customer'
+    ? [{ icon: 'calculator-outline' as const, label: 'Open the till', route: '/(pos)' }, ...items]
+    : items;
+
   async function handleSignOut() {
     setBusy(true);
     await signOut();
@@ -76,7 +82,7 @@ export default function Settings() {
       </View>
 
       <Card padded={false} style={styles.list}>
-        {items.map((item, i) => (
+        {menu.map((item, i) => (
           <View key={item.label}>
             <Card
               level={0}
@@ -87,7 +93,7 @@ export default function Settings() {
               <Text style={[text.body, styles.flex]}>{item.label}</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
             </Card>
-            {i < items.length - 1 ? <View style={styles.rule} /> : null}
+            {i < menu.length - 1 ? <View style={styles.rule} /> : null}
           </View>
         ))}
       </Card>

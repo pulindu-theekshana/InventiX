@@ -6,7 +6,7 @@
  * Look here when : Inputs look inconsistent.
  */
 
-import { useState } from 'react';
+import { useState, type Ref } from 'react';
 import { StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -20,6 +20,8 @@ interface Props extends TextInputProps {
   hint?: string;
   icon?: keyof typeof Ionicons.glyphMap;
   containerStyle?: StyleProp<ViewStyle>;
+  /** So a screen can put the cursor back, which the till does after every scan. */
+  ref?: Ref<TextInput>;
 }
 
 export function Input({ label, error, hint, icon, containerStyle, style, ...rest }: Props) {

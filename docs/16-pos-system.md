@@ -3,7 +3,7 @@
 What it is, how it fits the system that already exists, and why each decision was made that way.
 Written as it is built, one phase at a time.
 
-Last updated 1 October 2026 — phases 1 (database and backend) and 2 (the till's outbox) complete.
+Last updated 1 October 2026 — phases 1 to 3 complete: the backend, the outbox, and the sell screen.
 
 ---
 
@@ -157,9 +157,43 @@ does not poll at all.
 
 ---
 
+## Phase 3 — what was built
+
+`frontend/app/(pos)/index.tsx`, reached from the menu ("Open the till") or at `/pos` on the web
+build. Scan or type, build a bill, take cash, finish.
+
+| Piece | Where |
+|---|---|
+| Sell screen | `app/(pos)/index.tsx` |
+| Cart arithmetic and parked bills | `src/pos/cart.ts` |
+| Till chrome, no tabs | `app/(pos)/_layout.tsx` |
+
+### Decisions worth defending
+
+**The cursor returns to the search box after every action.** A barcode scanner types and presses
+Enter; it cannot tap a field first. A till that needs a tap between scans is slower than a notebook.
+
+**One exact barcode match is added without asking.** A name search offers a list, because a name is
+ambiguous. A scanned barcode is not.
+
+**Scanning the same product twice adds to the line** rather than creating a second one, so a bill
+of fifteen items stays readable.
+
+**The screen warns about stock but never blocks.** Selling more than the recorded quantity shows
+"only 3 recorded" beside the line and still sells, matching what the backend does with the figure.
+
+**Finishing a sale never touches the network.** It writes to the outbox and returns, so the receipt
+is ready immediately. The header shows "n waiting to sync", which is the only honest way to say the
+backend has not confirmed yet.
+
+**The cart total is computed twice**, once here for the cashier and once by the backend, which
+stores its own answer. Not duplication for its own sake: the screen cannot wait for a round trip,
+and the stored total must not be something a client chose.
+
+---
+
 ## Still to build
 
-- **Phase 3:** the sell screen
 - **Phase 4:** returns and day close screens, and the returns endpoint
 - **Phase 5:** who may use the till — cashier PIN, or a separate cashier account
 - **Phase 6:** install on the laptop as a PWA, working offline

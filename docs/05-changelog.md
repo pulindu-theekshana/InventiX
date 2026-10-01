@@ -14,6 +14,17 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 
 ---
 
+## 2026-10-01 — Phase 3 of the POS: the sell screen
+**Added.** `frontend/app/(pos)/` — the till: scan or search, cart with quantity steppers, discount,
+cash with change, three payment methods, finish. Reached from the menu as "Open the till".
+
+**Added.** `frontend/src/pos/cart.ts` — cart arithmetic and parked bills.
+
+**Changed.** `frontend/src/components/ui/Input.tsx` now accepts a ref, so the till can put the
+cursor back in the search box after every scan.
+
+**Next.** Phase 4 — returns and day close.
+
 ## 2026-10-01 — Phase 2 of the POS: the till's outbox
 **Added.** `frontend/src/pos/queue.ts` — a bill is written to the device, then sent. Retries what
 could not be delivered, separates a refusal from a bad connection, and never drops a bill by itself.
