@@ -328,3 +328,24 @@ designed on guesses about what the till needs; revisit if the POS becomes a prod
 packaged desktop app from the start (rejected: only needed for cash-drawer control).
 
 **Affects.** `frontend/app/(pos)/`, `docs/16-pos-system.md`.
+
+
+## D-019 — A till sale is stored on the device first, and sent afterwards
+
+**Decision.** `src/pos/queue.ts` keeps an outbox in AsyncStorage. Finishing a bill writes it to the
+device and returns; sending happens in the background and retries every 20 seconds while anything
+is waiting. A 4xx refusal (except 401, 408 and 429) marks the bill `stuck` instead of retrying it,
+and a stuck bill is only removed when the owner discards it.
+
+**Reason.** Billing must not wait for a network a shop may not have. Separating "the backend
+refused this" from "the backend could not be reached" is what stops a wrong bill being retried
+forever and a right bill being thrown away. Nothing is deleted automatically, because takings that
+vanish quietly are worse than a queue with an awkward row in it.
+
+**Alternatives.** Sending synchronously and showing a spinner (rejected: the counter stops when the
+WiFi does). SQLite from the start (deferred: AsyncStorage is enough for a day of bills, and the one
+module means swapping it changes no screen). A network listener (rejected: another dependency, and
+a failed request is cheap).
+
+**Affects.** Spec §6.6. `frontend/src/pos/queue.ts`, `frontend/src/pos/device.ts`,
+`frontend/src/hooks/usePosQueue.ts`.

@@ -215,3 +215,61 @@ export interface InventoryReport {
   trend: TrendPoint[];
   items: InventoryLine[];
 }
+
+/* ---------------------------------------------------------------- the till (spec 6.6) */
+
+export interface SaleLinePayload {
+  catalog_product_id: string;
+  /** Null when the shop does not track the product in Stocks. The sale is still recorded. */
+  stock_item_id: string | null;
+  /** Decimal: rice and dhal are sold by weight. */
+  quantity: number;
+  unit_price: number;
+}
+
+/** What the till sends. Written to the device first, then sent — see src/pos/queue.ts. */
+export interface SalePayload {
+  /** The till's own id for this bill. Resending the same one stores the sale once. */
+  client_sale_id: string;
+  /** 'T1-000147'. Made by the till, because an offline till cannot ask the server. */
+  receipt_no: string;
+  device_id: string;
+  sold_at: string;
+  payment_method: 'cash' | 'card' | 'other';
+  discount: number;
+  cashier_label: string | null;
+  lines: SaleLinePayload[];
+}
+
+export interface SaleLine {
+  catalog_product_id: string;
+  stock_item_id: string | null;
+  name: string;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+  returned_quantity: number;
+}
+
+export interface Sale {
+  id: string;
+  receipt_no: string;
+  kind: 'sale' | 'return';
+  sold_at: string;
+  payment_method: string;
+  discount: number;
+  total: number;
+  cashier_label: string | null;
+  lines: SaleLine[];
+}
+
+/** What the drawer should hold at closing time. Cash only — a card payment never reached it. */
+export interface DaySummary {
+  date: string;
+  bills: number;
+  sales_total: number;
+  returns_total: number;
+  cash_expected: number;
+  card_total: number;
+  other_total: number;
+}

@@ -14,6 +14,22 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 
 ---
 
+## 2026-10-01 — Phase 2 of the POS: the till's outbox
+**Added.** `frontend/src/pos/queue.ts` — a bill is written to the device, then sent. Retries what
+could not be delivered, separates a refusal from a bad connection, and never drops a bill by itself.
+
+**Added.** `frontend/src/pos/device.ts` — this till's prefix and the receipt counter, so an offline
+till can still number its bills.
+
+**Added.** `frontend/src/api/pos.ts` and the till types in `frontend/src/types/api.ts`.
+
+**Added.** `frontend/src/hooks/usePosQueue.ts` — unsent and stuck counts for a screen, with a
+background retry while anything is waiting.
+
+**Decisions.** D-019.
+
+**Next.** Phase 3 — the sell screen.
+
 ## 2026-10-01 — Phase 1 of the POS: database and backend
 **Added.** `database/migrations/0025_pos_adjustment_reasons.sql` — `pos_sale` and `return` join the
 closed list of reasons a quantity may change.

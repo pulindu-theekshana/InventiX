@@ -3,7 +3,7 @@
 What it is, how it fits the system that already exists, and why each decision was made that way.
 Written as it is built, one phase at a time.
 
-Last updated 1 October 2026 — phase 1 (database and backend) complete.
+Last updated 1 October 2026 — phases 1 (database and backend) and 2 (the till's outbox) complete.
 
 ---
 
@@ -114,9 +114,51 @@ a database (`tests/test_pos.py`, 24 tests).
 
 ---
 
+## Phase 2 — what was built
+
+The till writes a finished bill **to the device first** and sends it afterwards, so the receipt
+prints and the next customer is served whether or not the network answers. The pattern has a name
+worth knowing: an **outbox**.
+
+| File | Holds |
+|---|---|
+| `src/pos/device.ts` | This till's prefix (`T1`) and the counter behind every receipt number |
+| `src/pos/queue.ts` | The outbox: add a bill, retry the unsent ones, report what is left |
+| `src/hooks/usePosQueue.ts` | What a screen shows: how many are waiting, how many are stuck |
+| `src/api/pos.ts` | The four calls to the backend |
+
+### Decisions worth defending
+
+**A refusal and a bad connection are not the same failure.** A 4xx means the backend has read the
+bill and rejected it — the same bill will be rejected forever, so it is marked `stuck` and shown to
+the owner rather than retried into eternity. Anything else (no network, a timeout, a 500) stays
+`waiting` and is tried again. 401 is deliberately retryable: that is an expired session, which
+renews itself.
+
+**A stuck bill is never dropped automatically.** The owner has to discard it. Money that silently
+disappears from the takings is worse than a queue with an awkward row in it.
+
+**The counter is saved before the number is used.** An interrupted bill burns its number. A gap in
+the numbering is a question the owner can answer; two bills sharing a number is a return nobody can
+trace.
+
+**One sync at a time.** Two overlapping runs would send the same bill twice. The backend would
+survive it — it keys on `client_sale_id` — but a till already struggling with its connection should
+not double its own traffic.
+
+**Storage is AsyncStorage, behind one module.** A day of bills is a few hundred small rows. The
+honest limit: on the web this is browser storage, which the person using the laptop can clear, so a
+till that stays offline for days is not yet safe. Everything goes through `src/pos/queue.ts`, so
+moving to SQLite later changes no screen.
+
+**Retry every 20 seconds, and only while something is waiting.** A network listener would be
+tidier, but that is another dependency, and one failed request costs almost nothing. An idle till
+does not poll at all.
+
+---
+
 ## Still to build
 
-- **Phase 2:** local storage and the sync queue (sale saved on the device first, sent later)
 - **Phase 3:** the sell screen
 - **Phase 4:** returns and day close screens, and the returns endpoint
 - **Phase 5:** who may use the till — cashier PIN, or a separate cashier account
