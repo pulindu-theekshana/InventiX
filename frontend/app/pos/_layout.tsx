@@ -26,6 +26,8 @@ export default function PosLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Till' }} />
+      <Stack.Screen name="shift" options={{ title: 'Start a shift' }} />
+      <Stack.Screen name="settings" options={{ title: 'Till settings' }} />
       <Stack.Screen name="returns" options={{ title: 'Return goods' }} />
       <Stack.Screen name="close" options={{ title: 'Day close' }} />
     </Stack>

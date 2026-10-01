@@ -18,13 +18,19 @@ import { radius, spacing } from '../../src/theme/spacing';
 import { text } from '../../src/theme/typography';
 import { currency } from '../../src/lib/format';
 import { useSubmit } from '../../src/hooks/useSubmit';
+import { useAuth } from '../../src/hooks/useAuth';
+import { OwnerPin } from '../../src/components/OwnerPin';
 import { findSale, recordReturn } from '../../src/api/pos';
 import * as device from '../../src/pos/device';
+import * as settings from '../../src/pos/settings';
+import * as shift from '../../src/pos/shift';
 import { newId } from '../../src/pos/ids';
 import type { Sale } from '../../src/types/api';
 
 export default function Returns() {
   const submit = useSubmit();
+  const { profile } = useAuth();
+  const [approving, setApproving] = useState(false);
   /** Set when the cashier tapped a bill on Day close, so nothing has to be typed. */
   const { receipt: fromLink } = useLocalSearchParams<{ receipt?: string }>();
   const [receipt, setReceipt] = useState(fromLink ?? '');
@@ -66,6 +72,19 @@ export default function Returns() {
   );
   const anything = Object.values(coming).some((q) => q > 0);
 
+  /**
+   * A refund hands cash across the counter, which is why a large one is the owner's decision.
+   * The limit is theirs to set; at zero every return is approved, which some shops want.
+   */
+  function giveBackPressed() {
+    if (!bill || !anything) return;
+    if (refund > settings.current().return_limit) {
+      setApproving(true);
+      return;
+    }
+    void giveBack();
+  }
+
   async function giveBack() {
     if (!bill || !anything) return;
     const ok = await submit.run(async () => {
@@ -75,7 +94,7 @@ export default function Returns() {
         device_id: await device.getDeviceId(),
         returns_receipt_no: bill.receipt_no,
         sold_at: new Date().toISOString(),
-        cashier_label: null,
+        cashier_label: shift.current(),
         reason: null,
         lines: Object.entries(coming)
           .filter(([, q]) => q > 0)
@@ -181,11 +200,21 @@ export default function Returns() {
             icon="arrow-undo"
             loading={submit.busy}
             disabled={!anything}
-            onPress={giveBack}
+            onPress={giveBackPressed}
             fullWidth
           />
         </View>
       ) : null}
+      <OwnerPin
+        visible={approving}
+        shopId={profile?.id ?? ''}
+        reason={`Giving back ${currency(refund)} is above the limit.`}
+        onCancel={() => setApproving(false)}
+        onApproved={() => {
+          setApproving(false);
+          void giveBack();
+        }}
+      />
     </ScrollView>
   );
 }

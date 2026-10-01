@@ -14,6 +14,24 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 
 ---
 
+## 2026-10-01 — Phase 5 of the POS: who may use the till
+**Added.** `database/migrations/0028_pos_settings.sql` — one row per shop: the owner's PIN hash,
+the cashiers, and the limits above which the owner is asked.
+
+**Added.** `GET/PUT /customer/pos/settings`, `frontend/app/pos/shift.tsx`,
+`frontend/app/pos/settings.tsx`, `frontend/src/components/OwnerPin.tsx`,
+`frontend/src/pos/{pin,settings,shift}.ts`.
+
+**Changed.** The till now requires a shift before selling, stamps every bill with the cashier's
+name, asks the owner for a discount or refund above the limit and for leaving the till, and the day
+close has a "worth a look" list of discounts and returns per cashier.
+
+**Added.** Dependency `expo-crypto`, for hashing PINs on the device.
+
+**Decisions.** D-020.
+
+**Next.** Phase 6 — a real cashier account, where the data boundary is real.
+
 ## 2026-10-01 — Phase 4 of the POS: returns and day close
 **Added.** `POST /customer/pos/returns` — prices taken from the original bill, a line cannot be
 returned twice, stock comes back through the audited path.

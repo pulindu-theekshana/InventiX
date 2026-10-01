@@ -12,7 +12,14 @@ from fastapi import APIRouter, Query, status
 
 from ....dependencies import CustomerDep
 from . import service
-from .schemas import DaySummaryOut, ReturnIn, SaleIn, SaleOut
+from .schemas import (
+    DaySummaryOut,
+    PosSettingsIn,
+    PosSettingsOut,
+    ReturnIn,
+    SaleIn,
+    SaleOut,
+)
 
 router = APIRouter(prefix="/customer/pos", tags=["customer: pos"])
 
@@ -35,6 +42,17 @@ def list_sales(
     day: date | None = Query(default=None, description="Defaults to today."),  # noqa: B008 - FastAPI's documented idiom
 ) -> list[SaleOut]:
     return service.list_sales(user.db, user.id, day)
+
+
+@router.get("/settings", response_model=PosSettingsOut)
+def get_settings(user: CustomerDep) -> PosSettingsOut:
+    """The till reads this once and keeps it, so a PIN still works with no connection."""
+    return service.get_settings(user.db, user.id)
+
+
+@router.put("/settings", response_model=PosSettingsOut)
+def save_settings(body: PosSettingsIn, user: CustomerDep) -> PosSettingsOut:
+    return service.save_settings(user.db, user.id, body)
 
 
 @router.get("/summary", response_model=DaySummaryOut)

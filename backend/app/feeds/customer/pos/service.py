@@ -17,6 +17,8 @@ from ....domain import seasonal, stock
 from .schemas import (
     CashierTotalOut,
     DaySummaryOut,
+    PosSettingsIn,
+    PosSettingsOut,
     ReturnIn,
     SaleIn,
     SaleLineOut,
@@ -357,3 +359,37 @@ def day_summary(db, owner_id: str, day: date | None = None) -> DaySummaryOut:
             for name, (count, value) in sorted(per.items(), key=lambda kv: -kv[1][1])
         ],
     )
+
+
+def get_settings(db, owner_id: str) -> PosSettingsOut:
+    """
+    Defaults when the shop has never set anything: no PIN, so the till does not lock. A
+    one-person shop should not have to configure a lock against nobody.
+    """
+    row = (
+        db.table("pos_settings").select("owner_pin_hash, discount_limit, return_limit, cashiers")
+        .eq("owner_id", owner_id).maybe_single().execute()
+    )
+    if not row or not row.data:
+        return PosSettingsOut()
+    return PosSettingsOut(
+        owner_pin_hash=row.data.get("owner_pin_hash"),
+        discount_limit=float(row.data["discount_limit"]),
+        return_limit=float(row.data["return_limit"]),
+        cashiers=row.data.get("cashiers") or [],
+    )
+
+
+def save_settings(db, owner_id: str, data: PosSettingsIn) -> PosSettingsOut:
+    """
+    The hashes arrive already hashed, so this never handles a PIN. Upsert on owner_id: a shop has
+    one set of till settings, and "create or update" is the only operation that makes sense.
+    """
+    service_client().table("pos_settings").upsert({
+        "owner_id": owner_id,
+        "owner_pin_hash": data.owner_pin_hash,
+        "discount_limit": data.discount_limit,
+        "return_limit": data.return_limit,
+        "cashiers": [c.model_dump() for c in data.cashiers],
+    }).execute()
+    return get_settings(db, owner_id)

@@ -3,7 +3,7 @@
 What it is, how it fits the system that already exists, and why each decision was made that way.
 Written as it is built, one phase at a time.
 
-Last updated 1 October 2026 — phases 1 to 4 complete: the backend, the outbox, the sell screen, returns and day close.
+Last updated 1 October 2026 — phases 1 to 5 complete: the backend, the outbox, the sell screen, returns, day close, and who may use the till.
 
 ---
 
@@ -233,9 +233,62 @@ construction, and a query that forgets cannot overstate what the shop sold.
 
 ---
 
+## Phase 5 — who may use the till
+
+A cashier says who they are, the owner is asked about the things that cost money, and the owner can
+see at a glance what happened.
+
+| Piece | Where |
+|---|---|
+| The shop's cashiers, owner PIN and limits | `pos_settings` (migration 0028), `GET/PUT /customer/pos/settings` |
+| PIN hashing | `src/pos/pin.ts` |
+| Who is at the till now | `src/pos/shift.ts`, `app/pos/shift.tsx` |
+| Owner approval prompt | `src/components/OwnerPin.tsx` |
+| Owner's settings screen | `app/pos/settings.tsx` |
+
+**What needs the owner's PIN:** a discount above the limit (Rs. 100 by default), a refund above the
+limit (Rs. 500), leaving the till for the rest of the app, and opening till settings.
+
+### Decisions worth defending
+
+**Limits, not approval for everything.** Asking the owner to approve every discount is how staff
+learn to stop using the till properly. Below the limit a cashier is not interrupted; above it the
+owner decides. Both limits are the owner's to set, and zero means "ask me every time".
+
+**Detection does more work than prevention.** Day close lists every discount and return with the
+name of who did it. An employee who knows that behaves differently, and nobody is interrupted
+during a rush. That list cost far less to build than the approval flow.
+
+**A shift, not an account.** The cashier picks their name and types a PIN; every bill then carries
+that name, and the day's takings split per person. It answers "who is standing here", not "what may
+you do".
+
+**PINs are hashed on the device**, salted with the shop id, so the server never sees the number and
+the same PIN in two shops produces different hashes.
+
+**Settings live on the shop's record, not the laptop.** Browser storage can be cleared, which would
+quietly remove every lock. They are cached on the device so the till still locks with no
+connection.
+
+**A shop with no cashiers is not forced to invent one.** The till offers "sell as the owner",
+because a one-person shop should not have to configure a lock against nobody.
+
+### What this is, honestly
+
+**A lock on the screens, not on the data.** The cashier is using the owner's login, so the token in
+that browser can still reach everything through the API. Four digits is ten thousand guesses, and
+anyone holding the hash can find the PIN. It stops an honest employee wandering into supplier
+prices; it does not stop a determined one.
+
+The boundary that holds is a **separate cashier account** with its own permissions, which is the
+next phase. The work here is not wasted: every real till has both, because an account answers
+"what may you do" and a PIN answers "who is standing here right now".
+
+---
+
 ## Still to build
 
-- **Phase 5:** who may use the till — cashier PIN, or a separate cashier account
+- **Phase 6:** a real cashier account, so the data boundary is real and not only the screens
 - **Phase 6:** install on the laptop as a PWA, working offline
 - **Phase 7:** receipt printing and scanner behaviour
 - **Phase 8, only if needed:** a packaged `.exe`

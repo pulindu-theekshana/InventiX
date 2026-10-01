@@ -17,6 +17,7 @@ import { radius, spacing } from '../../src/theme/spacing';
 import { text } from '../../src/theme/typography';
 import { currency } from '../../src/lib/format';
 import { usePosQueue } from '../../src/hooks/usePosQueue';
+import * as shift from '../../src/pos/shift';
 import { daySummary, listSales } from '../../src/api/pos';
 import type { DaySummary, Sale } from '../../src/types/api';
 
@@ -98,6 +99,26 @@ export default function Close() {
         </View>
       ) : null}
 
+      {/*
+        Detection, not prevention: an employee who knows every discount and return carries their
+        name behaves differently, and nobody is interrupted during a rush. Spec 6.6.
+      */}
+      {bills.some((b) => b.kind === 'return' || b.discount > 0) ? (
+        <View style={styles.card}>
+          <Text style={text.title}>Worth a look</Text>
+          {bills
+            .filter((b) => b.kind === 'return' || b.discount > 0)
+            .map((b) => (
+              <View key={`look-${b.id}`} style={styles.row}>
+                <Text style={[text.body, styles.flex]}>
+                  {b.receipt_no} · {b.kind === 'return' ? 'return' : `discount ${currency(b.discount)}`}
+                </Text>
+                <Text style={[text.caption, styles.muted]}>{b.cashier_label ?? 'not recorded'}</Text>
+              </View>
+            ))}
+        </View>
+      ) : null}
+
       <Text style={text.title}>Today&apos;s bills</Text>
       {bills.length === 0 ? (
         <Text style={[text.label, styles.muted]}>Nothing sold yet today.</Text>
@@ -144,6 +165,17 @@ export default function Close() {
         variant="outline"
         icon="arrow-back"
         onPress={() => router.replace('/pos')}
+        fullWidth
+      />
+      {/* Handing over at the end of a shift. The next person starts their own, under their name. */}
+      <Button
+        label="End this shift"
+        variant="outline"
+        icon="log-out-outline"
+        onPress={async () => {
+          await shift.end();
+          router.replace('/pos/shift');
+        }}
         fullWidth
       />
     </ScrollView>

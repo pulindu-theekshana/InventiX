@@ -218,6 +218,21 @@ export interface InventoryReport {
 
 /* ---------------------------------------------------------------- the till (spec 6.6) */
 
+export interface Cashier {
+  name: string;
+  /** SHA-256 of the PIN, salted with the shop id. The number itself never leaves the device. */
+  pin_hash: string;
+}
+
+/** Who may use the till, and what needs the owner. One set per shop. */
+export interface PosSettings {
+  owner_pin_hash: string | null;
+  /** A discount at or below this goes through; above it the owner is asked. 0 = always ask. */
+  discount_limit: number;
+  return_limit: number;
+  cashiers: Cashier[];
+}
+
 export interface SaleLinePayload {
   catalog_product_id: string;
   /** Null when the shop does not track the product in Stocks. The sale is still recorded. */

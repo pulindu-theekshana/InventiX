@@ -6,7 +6,7 @@
  * Look here when : A product cannot be found at the till, a total is wrong, or a finished bill does not reach the backend.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -28,9 +28,13 @@ import { text } from '../../src/theme/typography';
 import { currency } from '../../src/lib/format';
 import { useStocks } from '../../src/hooks/useStocks';
 import { usePosQueue } from '../../src/hooks/usePosQueue';
+import { useAuth } from '../../src/hooks/useAuth';
+import { OwnerPin } from '../../src/components/OwnerPin';
 import * as cart from '../../src/pos/cart';
 import * as device from '../../src/pos/device';
 import * as queue from '../../src/pos/queue';
+import * as settings from '../../src/pos/settings';
+import * as shift from '../../src/pos/shift';
 import { newId } from '../../src/pos/ids';
 import type { CartLine } from '../../src/pos/cart';
 import type { StockItemView } from '../../src/types/api';
@@ -40,6 +44,10 @@ type Payment = 'cash' | 'card' | 'other';
 export default function Sell() {
   const stocks = useStocks();
   const outbox = usePosQueue();
+  const { profile } = useAuth();
+  const [cashier, setCashier] = useState<string | null>(null);
+  /** What the owner is being asked to approve, or null when nothing is waiting. */
+  const [approving, setApproving] = useState<'discount' | 'leave' | null>(null);
 
   const [query, setQuery] = useState('');
   const [lines, setLines] = useState<CartLine[]>([]);
@@ -55,9 +63,18 @@ export default function Sell() {
   useFocusEffect(
     useCallback(() => {
       stocks.refresh();
+      settings.load();
+      // No shift started means nobody has said who is at the counter, so bills would carry no
+      // name. Sent there rather than silently recording sales as "unknown".
+      shift.load().then((who) => {
+        setCashier(who);
+        if (!who) router.replace('/pos/shift');
+      });
       searchBox.current?.focus();
     }, []),
   );
+
+  useEffect(() => shift.subscribe(() => setCashier(shift.current())), []);
 
   const items = stocks.data ?? [];
 
@@ -101,6 +118,19 @@ export default function Sell() {
     setPayment('cash');
   }
 
+  /**
+   * A discount is where a till leaks money, so anything above the owner's limit is approved by
+   * them. Below it the cashier is not interrupted, which is what makes the limit usable at all.
+   */
+  function finishPressed() {
+    const limit = settings.current().discount_limit;
+    if (discountValue > limit) {
+      setApproving('discount');
+      return;
+    }
+    void finish();
+  }
+
   async function finish() {
     if (!canFinish) return;
     setError(null);
@@ -113,7 +143,7 @@ export default function Sell() {
         sold_at: new Date().toISOString(),
         payment_method: payment,
         discount: discountValue,
-        cashier_label: null,
+        cashier_label: cashier,
         lines: lines.map((l) => ({
           catalog_product_id: l.catalog_product_id,
           stock_item_id: l.stock_item_id,
@@ -149,6 +179,10 @@ export default function Sell() {
           returnKeyType="done"
           containerStyle={styles.flex}
         />
+        <Pressable onPress={() => setApproving('leave')} style={styles.link}>
+          <Ionicons name="exit-outline" size={20} color={colors.accent} />
+          <Text style={[text.caption, { color: colors.accent }]}>Leave</Text>
+        </Pressable>
         <Pressable onPress={() => router.push('/pos/returns')} style={styles.link}>
           <Ionicons name="arrow-undo-outline" size={20} color={colors.accent} />
           <Text style={[text.caption, { color: colors.accent }]}>Return</Text>
@@ -167,6 +201,9 @@ export default function Sell() {
           )}
           {outbox.stuck > 0 ? (
             <Text style={[text.caption, { color: colors.danger }]}>{outbox.stuck} rejected</Text>
+          ) : null}
+          {cashier ? (
+            <Text style={[text.caption, { color: colors.textSubtle }]}>{cashier}</Text>
           ) : null}
         </View>
       </View>
@@ -349,12 +386,29 @@ export default function Sell() {
             variant="accent"
             size="lg"
             icon="checkmark"
-            onPress={finish}
+            onPress={finishPressed}
             disabled={!canFinish}
             style={styles.flexTwo}
           />
         </View>
       </View>
+      <OwnerPin
+        visible={approving !== null}
+        shopId={profile?.id ?? ''}
+        reason={
+          approving === 'discount'
+            ? `A discount of ${currency(discountValue)} is above the limit.`
+            : 'Leaving the till opens the rest of the app.'
+        }
+        onCancel={() => setApproving(null)}
+        onApproved={async () => {
+          const what = approving;
+          setApproving(null);
+          if (what === 'discount') return finish();
+          await shift.end();
+          router.replace('/stocks');
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

@@ -7,7 +7,7 @@
  */
 
 import { request } from './client';
-import type { DaySummary, ReturnPayload, Sale, SalePayload } from '../types/api';
+import type { DaySummary, PosSettings, ReturnPayload, Sale, SalePayload } from '../types/api';
 
 /**
  * Safe to call twice with the same payload: the backend keys on client_sale_id and returns the
@@ -35,4 +35,12 @@ export async function findSale(receiptNo: string): Promise<Sale> {
 
 export async function daySummary(day?: string): Promise<DaySummary> {
   return request(`/customer/pos/summary${day ? `?day=${day}` : ''}`);
+}
+
+export async function getSettings(): Promise<PosSettings> {
+  return request('/customer/pos/settings');
+}
+
+export async function saveSettings(settings: PosSettings): Promise<PosSettings> {
+  return request('/customer/pos/settings', { method: 'PUT', body: JSON.stringify(settings) });
 }

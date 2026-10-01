@@ -13,6 +13,29 @@ from pydantic import BaseModel, Field, field_validator
 from ....domain import pos as rules
 
 
+class CashierIn(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    # Hashed on the device: the server has no use for the number itself, and storing it would
+    # make a shop's PINs readable by anyone who ever reads a backup.
+    pin_hash: str = Field(min_length=16, max_length=128)
+
+
+class PosSettingsIn(BaseModel):
+    """What the owner sets once, from their phone or from the till."""
+
+    owner_pin_hash: str | None = Field(default=None, min_length=16, max_length=128)
+    discount_limit: float = Field(default=100, ge=0)
+    return_limit: float = Field(default=500, ge=0)
+    cashiers: list[CashierIn] = []
+
+
+class PosSettingsOut(BaseModel):
+    owner_pin_hash: str | None = None
+    discount_limit: float = 100
+    return_limit: float = 500
+    cashiers: list[CashierIn] = []
+
+
 class SaleLineIn(BaseModel):
     catalog_product_id: str
     # Null when the shop does not track the product in Stocks. The sale is still recorded.

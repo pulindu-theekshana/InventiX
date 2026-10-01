@@ -349,3 +349,29 @@ a failed request is cheap).
 
 **Affects.** Spec §6.6. `frontend/src/pos/queue.ts`, `frontend/src/pos/device.ts`,
 `frontend/src/hooks/usePosQueue.ts`.
+
+
+## D-020 — The till is guarded by limits and attribution, not by approval for everything
+
+**Decision.** A cashier starts a shift with a PIN and every bill carries their name. A discount or
+a refund above a limit the owner sets needs the owner's PIN, as does leaving the till or opening
+till settings. Day close lists every discount and return with the cashier's name. PINs are SHA-256
+hashes salted with the shop id, computed on the device and stored in `pos_settings`.
+
+**Reason.** Asking the owner to approve every discount makes staff stop using the till properly,
+so the guard is a limit with sensible defaults, and zero means "ask me every time" for shops that
+want it. The cheaper half is detection: a list the owner glances at while counting the drawer
+changes behaviour without interrupting anyone.
+
+**Alternatives.** A separate cashier account (deferred to the next phase: it is the only real data
+boundary, and it touches login, roles and RLS). PIN on the device only (rejected: clearing browser
+storage would remove every lock). Approval from the owner's phone (rejected: it fails exactly when
+the till is offline).
+
+**Known limit, stated rather than hidden.** This locks screens, not data. The cashier holds the
+owner's token, so the API is still reachable, and a four digit PIN is brute-forceable from its
+hash.
+
+**Affects.** Spec §6.6. `database/migrations/0028_pos_settings.sql`,
+`backend/app/feeds/customer/pos/`, `frontend/src/pos/{pin,settings,shift}.ts`,
+`frontend/app/pos/{shift,settings}.tsx`, `frontend/src/components/OwnerPin.tsx`.
