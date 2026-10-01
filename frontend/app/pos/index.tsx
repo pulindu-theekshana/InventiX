@@ -17,7 +17,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
@@ -31,6 +31,7 @@ import { usePosQueue } from '../../src/hooks/usePosQueue';
 import * as cart from '../../src/pos/cart';
 import * as device from '../../src/pos/device';
 import * as queue from '../../src/pos/queue';
+import { newId } from '../../src/pos/ids';
 import type { CartLine } from '../../src/pos/cart';
 import type { StockItemView } from '../../src/types/api';
 
@@ -140,6 +141,14 @@ export default function Sell() {
           returnKeyType="done"
           containerStyle={styles.flex}
         />
+        <Pressable onPress={() => router.push('/pos/returns')} style={styles.link}>
+          <Ionicons name="arrow-undo-outline" size={20} color={colors.accent} />
+          <Text style={[text.caption, { color: colors.accent }]}>Return</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push('/pos/close')} style={styles.link}>
+          <Ionicons name="calculator-outline" size={20} color={colors.accent} />
+          <Text style={[text.caption, { color: colors.accent }]}>Day close</Text>
+        </Pressable>
         <View style={styles.status}>
           {outbox.waiting > 0 ? (
             <Text style={[text.caption, { color: colors.warning }]}>
@@ -303,20 +312,11 @@ export default function Sell() {
   );
 }
 
-/** crypto.randomUUID is not in every runtime this app meets, so a fallback is kept. */
-function newId(): string {
-  const maybe = globalThis.crypto as { randomUUID?: () => string } | undefined;
-  if (maybe?.randomUUID) return maybe.randomUUID();
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
-  });
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   bar: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg },
   status: { alignItems: 'flex-end', gap: 2 },
+  link: { alignItems: 'center', gap: 2 },
   flex: { flex: 1 },
   flexTwo: { flex: 2 },
   muted: { color: colors.textMuted },

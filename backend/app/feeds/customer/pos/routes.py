@@ -12,7 +12,7 @@ from fastapi import APIRouter, Query, status
 
 from ....dependencies import CustomerDep
 from . import service
-from .schemas import DaySummaryOut, SaleIn, SaleOut
+from .schemas import DaySummaryOut, ReturnIn, SaleIn, SaleOut
 
 router = APIRouter(prefix="/customer/pos", tags=["customer: pos"])
 
@@ -21,6 +21,12 @@ router = APIRouter(prefix="/customer/pos", tags=["customer: pos"])
 def record_sale(body: SaleIn, user: CustomerDep) -> SaleOut:
     """A bill the till has finished. Safe to send again: the same client_sale_id wins once."""
     return service.record_sale(user.db, user.id, body)
+
+
+@router.post("/returns", response_model=SaleOut, status_code=status.HTTP_201_CREATED)
+def record_return(body: ReturnIn, user: CustomerDep) -> SaleOut:
+    """Goods coming back against a bill. Prices come from that bill, not from this request."""
+    return service.record_return(user.db, user.id, body)
 
 
 @router.get("/sales", response_model=list[SaleOut])

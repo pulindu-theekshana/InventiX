@@ -241,6 +241,18 @@ export interface SalePayload {
   lines: SaleLinePayload[];
 }
 
+/** Goods coming back. Prices are taken from the original bill by the backend, never sent. */
+export interface ReturnPayload {
+  client_sale_id: string;
+  receipt_no: string;
+  device_id: string;
+  returns_receipt_no: string;
+  sold_at: string;
+  cashier_label: string | null;
+  reason: string | null;
+  lines: { catalog_product_id: string; quantity: number }[];
+}
+
 export interface SaleLine {
   catalog_product_id: string;
   stock_item_id: string | null;
@@ -264,6 +276,12 @@ export interface Sale {
 }
 
 /** What the drawer should hold at closing time. Cash only — a card payment never reached it. */
+export interface CashierTotal {
+  cashier: string | null;
+  bills: number;
+  sales_total: number;
+}
+
 export interface DaySummary {
   date: string;
   bills: number;
@@ -272,4 +290,5 @@ export interface DaySummary {
   cash_expected: number;
   card_total: number;
   other_total: number;
+  by_cashier: CashierTotal[];
 }

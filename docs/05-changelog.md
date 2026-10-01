@@ -14,6 +14,19 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 
 ---
 
+## 2026-10-01 — Phase 4 of the POS: returns and day close
+**Added.** `POST /customer/pos/returns` — prices taken from the original bill, a line cannot be
+returned twice, stock comes back through the audited path.
+
+**Added.** `frontend/app/pos/returns.tsx` and `frontend/app/pos/close.tsx`, both reachable from the
+sell screen.
+
+**Changed.** The day summary now splits takings per cashier, ready for phase 5 to put a real person
+behind the label.
+
+**Next.** Phase 5 — cashier PIN at shift start, owner PIN on discounts, returns and leaving the
+till.
+
 ## 2026-10-01 — Phase 3 of the POS: the sell screen
 **Added.** `frontend/app/(pos)/` — the till: scan or search, cart with quantity steppers, discount,
 cash with change, three payment methods, finish. Reached from the menu as "Open the till".

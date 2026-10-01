@@ -7,7 +7,7 @@
  */
 
 import { request } from './client';
-import type { DaySummary, Sale, SalePayload } from '../types/api';
+import type { DaySummary, ReturnPayload, Sale, SalePayload } from '../types/api';
 
 /**
  * Safe to call twice with the same payload: the backend keys on client_sale_id and returns the
@@ -15,6 +15,14 @@ import type { DaySummary, Sale, SalePayload } from '../types/api';
  */
 export async function recordSale(sale: SalePayload): Promise<Sale> {
   return request('/customer/pos/sales', { method: 'POST', body: JSON.stringify(sale) });
+}
+
+/**
+ * A return needs the original bill, which only the backend has, so unlike a sale this one
+ * cannot be made offline. The till says so rather than queueing something it cannot price.
+ */
+export async function recordReturn(ret: ReturnPayload): Promise<Sale> {
+  return request('/customer/pos/returns', { method: 'POST', body: JSON.stringify(ret) });
 }
 
 export async function listSales(day?: string): Promise<Sale[]> {

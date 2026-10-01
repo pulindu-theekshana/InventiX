@@ -3,7 +3,7 @@
 What it is, how it fits the system that already exists, and why each decision was made that way.
 Written as it is built, one phase at a time.
 
-Last updated 1 October 2026 — phases 1 to 3 complete: the backend, the outbox, and the sell screen.
+Last updated 1 October 2026 — phases 1 to 4 complete: the backend, the outbox, the sell screen, returns and day close.
 
 ---
 
@@ -192,9 +192,40 @@ and the stored total must not be something a client chose.
 
 ---
 
+## Phase 4 — what was built
+
+**Returns** (`app/pos/returns.tsx`, `POST /customer/pos/returns`). The cashier types the receipt
+number, the bill appears, they choose what is coming back, and the money goes back.
+
+**Day close** (`app/pos/close.tsx`, `GET /customer/pos/summary`). What should be in the drawer,
+today's bills, and a split per cashier.
+
+### Decisions worth defending
+
+**Prices come from the original bill, never from the return request.** A return that could name its
+own price is a way to empty the drawer by typing a bigger number.
+
+**A line cannot come back twice.** Each sold line records how much has already been returned, and
+the backend refuses more than is left. The screen stops the cashier before the customer is told a
+figure, and the backend refuses it again if they get past the screen.
+
+**A return always gives cash back**, whatever the sale was paid with. Refunding to a card is the
+card machine's business, not the till's.
+
+**Returns do not work offline, and say so.** Pricing a return needs the original bill, which only
+the backend holds. Queueing a refund the till cannot price would be worse than an honest message.
+
+**Day close warns before it counts.** If bills are still waiting to sync, the figure on screen is
+not what the drawer holds, and the cashier is told that first rather than discovering it while
+counting.
+
+**Stock comes back through the same audited path** as every other quantity change, so returned
+goods appear on the shelf and in the history together.
+
+---
+
 ## Still to build
 
-- **Phase 4:** returns and day close screens, and the returns endpoint
 - **Phase 5:** who may use the till — cashier PIN, or a separate cashier account
 - **Phase 6:** install on the laptop as a PWA, working offline
 - **Phase 7:** receipt printing and scanner behaviour
@@ -203,6 +234,8 @@ and the stored total must not be something a client chose.
 ## Known limits
 
 - While a till is offline the owner's phone shows stale stock. It catches up on reconnect.
-- Returns are planned but not built: the tables and the rules are ready, the endpoint is not.
+- Reports count **gross** sales: a return puts stock back and shows in the day close, but does not
+  subtract from `sales_records`, whose `quantity_sold` cannot be negative. Net sales need either a
+  signed column or a returns table of its own.
 - VAT-registered shops (turnover over Rs. 60M a year) will eventually need an IRD-approved
   "secured POS" connected to the national e-invoicing system. A small shop is below that line.

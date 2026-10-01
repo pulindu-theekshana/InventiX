@@ -8,12 +8,20 @@ Look here when : A sale is stored twice, stock does not drop after a sale, or th
 
 import logging
 from datetime import date
+from decimal import Decimal
 
 from ....core.exceptions import NotFound, ValidationFailed
 from ....core.supabase import service_client
 from ....domain import pos as rules
 from ....domain import seasonal, stock
-from .schemas import DaySummaryOut, SaleIn, SaleLineOut, SaleOut
+from .schemas import (
+    CashierTotalOut,
+    DaySummaryOut,
+    ReturnIn,
+    SaleIn,
+    SaleLineOut,
+    SaleOut,
+)
 
 log = logging.getLogger(__name__)
 
@@ -159,6 +167,109 @@ def _move_stock(db, owner_id: str, sale_id: str, lines, stock_rows: dict) -> Non
                           line.stock_item_id, sale_id)
 
 
+def record_return(db, owner_id: str, data: ReturnIn) -> SaleOut:
+    """
+    Goods coming back against a bill this shop issued.
+
+    Prices come from the original bill, never from the request: a return that could name its own
+    price is a way to empty the drawer. Quantities are checked against what is left on each line,
+    so the same item cannot be returned twice.
+    """
+    existing = (
+        db.table("pos_sales").select(SELECT)
+        .eq("owner_id", owner_id).eq("client_sale_id", data.client_sale_id)
+        .maybe_single().execute()
+    )
+    if existing and existing.data:
+        return _out(existing.data)
+
+    original = (
+        db.table("pos_sales").select(f"id, kind, {SELECT}")
+        .eq("owner_id", owner_id).eq("receipt_no", data.returns_receipt_no)
+        .maybe_single().execute()
+    )
+    if not original or not original.data:
+        raise NotFound("We could not find a bill with that receipt number.")
+    if original.data["kind"] != "sale":
+        raise ValidationFailed("That receipt is itself a return.")
+
+    sold = {i["catalog_product_id"]: i for i in (original.data.get("pos_sale_items") or [])}
+
+    lines: list[dict] = []
+    for line in data.lines:
+        item = sold.get(line.catalog_product_id)
+        if not item:
+            raise ValidationFailed("That product is not on the bill being returned.")
+        left = rules.returnable(item["quantity"], item["returned_quantity"])
+        if Decimal(str(line.quantity)) > left:
+            raise ValidationFailed(
+                f"Only {left} of {(item.get('product_catalog') or {}).get('name', 'that item')} "
+                "is left to return on this bill."
+            )
+        lines.append({
+            "item": item,
+            "quantity": line.quantity,
+            "unit_price": float(item["unit_price"]),
+        })
+
+    total = rules.bill_total(
+        [{"quantity": line["quantity"], "unit_price": line["unit_price"]} for line in lines]
+    )
+
+    ret = service_client().table("pos_sales").insert({
+        "owner_id": owner_id,
+        "kind": "return",
+        "returns_sale_id": original.data["id"],
+        "receipt_no": data.receipt_no,
+        "device_id": data.device_id,
+        "sold_at": data.sold_at.isoformat(),
+        # Money goes back the way it came in. Card refunds are the card machine's business.
+        "payment_method": "cash",
+        "discount": 0,
+        "total": float(total),
+        "cashier_label": data.cashier_label,
+        "client_sale_id": data.client_sale_id,
+    }).execute().data[0]
+
+    service_client().table("pos_sale_items").insert([
+        {
+            "sale_id": ret["id"],
+            "catalog_product_id": line["item"]["catalog_product_id"],
+            "stock_item_id": line["item"].get("stock_item_id"),
+            "quantity": line["quantity"],
+            "unit_price": line["unit_price"],
+            "line_total": float(rules.line_total(line["quantity"], line["unit_price"])),
+        }
+        for line in lines
+    ]).execute()
+
+    # Mark the original lines, so the same goods cannot come back a second time.
+    for line in lines:
+        item = line["item"]
+        service_client().table("pos_sale_items").update({
+            "returned_quantity": float(Decimal(str(item["returned_quantity"]))
+                                       + Decimal(str(line["quantity"]))),
+        }).eq("sale_id", original.data["id"]).eq(
+            "catalog_product_id", item["catalog_product_id"]
+        ).execute()
+
+    # Stock comes back. Through the same audited path, so the shelf and the trail agree.
+    for line in lines:
+        stock_item_id = line["item"].get("stock_item_id")
+        if not stock_item_id:
+            continue
+        change = rules.whole_units(line["quantity"])
+        if change <= 0:
+            continue
+        try:
+            stock.apply(db, stock_item_id, change, "return", owner_id, ret["id"])
+        except Exception:
+            log.exception("stock did not come back for %s on return %s", stock_item_id, ret["id"])
+
+    created = db.table("pos_sales").select(SELECT).eq("id", ret["id"]).maybe_single().execute()
+    return _out(created.data)
+
+
 def get_sale(db, owner_id: str, receipt_no: str) -> SaleOut:
     """Used at the counter when a customer brings a receipt back."""
     row = (
@@ -193,7 +304,7 @@ def day_summary(db, owner_id: str, day: date | None = None) -> DaySummaryOut:
     """
     day = day or seasonal.today()
     rows = (
-        db.table("pos_sales").select("kind, payment_method, total")
+        db.table("pos_sales").select("kind, payment_method, total, cashier_label")
         .eq("owner_id", owner_id)
         .gte("sold_at", f"{day.isoformat()}T00:00:00")
         .lte("sold_at", f"{day.isoformat()}T23:59:59")
@@ -207,6 +318,17 @@ def day_summary(db, owner_id: str, day: date | None = None) -> DaySummaryOut:
         ))
 
     sales, returns = total("sale"), total("return")
+
+    # Grouped here rather than in the database: a shop's day is tens of bills, and PostgREST
+    # cannot group without a view. Phase 5 gives cashier_label a real person behind it.
+    per: dict[str | None, list[float]] = {}
+    for row in rows:
+        if row["kind"] != "sale":
+            continue
+        slot = per.setdefault(row.get("cashier_label"), [0, 0.0])
+        slot[0] += 1
+        slot[1] += float(row["total"])
+
     return DaySummaryOut(
         date=day.isoformat(),
         bills=sum(1 for r in rows if r["kind"] == "sale"),
@@ -215,4 +337,8 @@ def day_summary(db, owner_id: str, day: date | None = None) -> DaySummaryOut:
         cash_expected=round(total("sale", "cash") - total("return", "cash"), 2),
         card_total=round(total("sale", "card"), 2),
         other_total=round(total("sale", "other"), 2),
+        by_cashier=[
+            CashierTotalOut(cashier=name, bills=int(count), sales_total=round(value, 2))
+            for name, (count, value) in sorted(per.items(), key=lambda kv: -kv[1][1])
+        ],
     )

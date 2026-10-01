@@ -50,6 +50,35 @@ class SaleIn(BaseModel):
         return value
 
 
+class ReturnLineIn(BaseModel):
+    catalog_product_id: str
+    quantity: float = Field(gt=0)
+
+
+class ReturnIn(BaseModel):
+    """
+    Goods coming back against a bill the shop already has. The customer names the receipt; the
+    prices come from that bill, never from this request, so a return cannot refund more than was
+    charged.
+    """
+
+    client_sale_id: str
+    receipt_no: str
+    device_id: str = Field(min_length=1, max_length=6)
+    returns_receipt_no: str
+    sold_at: datetime
+    cashier_label: str | None = Field(default=None, max_length=60)
+    reason: str | None = Field(default=None, max_length=200)
+    lines: list[ReturnLineIn] = Field(min_length=1)
+
+    @field_validator("receipt_no", "returns_receipt_no")
+    @classmethod
+    def _receipt(cls, value: str) -> str:
+        if not rules.is_valid_receipt_no(value):
+            raise ValueError("A receipt number looks like T1-000147.")
+        return value.strip()
+
+
 class SaleLineOut(BaseModel):
     catalog_product_id: str
     stock_item_id: str | None = None
@@ -72,6 +101,14 @@ class SaleOut(BaseModel):
     lines: list[SaleLineOut] = []
 
 
+class CashierTotalOut(BaseModel):
+    """Takings per cashier. Phase 5 fills `cashier` with a real person; until then it is None."""
+
+    cashier: str | None = None
+    bills: int
+    sales_total: float
+
+
 class DaySummaryOut(BaseModel):
     """What the cashier counts the drawer against at closing time."""
 
@@ -82,3 +119,4 @@ class DaySummaryOut(BaseModel):
     cash_expected: float
     card_total: float
     other_total: float
+    by_cashier: list[CashierTotalOut] = []
