@@ -32,7 +32,7 @@ async function authHeader(): Promise<Record<string, string>> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}, retried = false): Promise<T> {
   /**
    * A file upload sends FormData, which writes its own multipart content type with a
    * boundary. Forcing application/json here made the backend reject every upload.
@@ -47,6 +47,17 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
       ...init.headers,
     },
   });
+
+  /**
+   * A screen can mount while the session is still being written -- the first request after
+   * signing in went out with no token and came back 401, and only a reload fixed it. One retry
+   * with a freshly read session covers that, and an expired token being renewed behind us.
+   * Once, never in a loop: a real 401 must still reach the screen and say "sign in again".
+   */
+  if (response.status === 401 && !retried && supabase) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.access_token) return request<T>(path, init, true);
+  }
 
   if (!response.ok) {
     /** Keep the backend's own message when it sends one — it is written for the shop owner. */

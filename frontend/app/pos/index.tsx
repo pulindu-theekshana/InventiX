@@ -218,7 +218,11 @@ export default function Sell() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="cart-outline" size={34} color={colors.textSubtle} />
-            <Text style={[text.label, styles.muted]}>Scan the first item</Text>
+            {/* After a sale the till is not waiting for a first item, it is waiting for a
+                customer. Saying "scan the first item" there reads like nothing was recorded. */}
+            <Text style={[text.label, styles.muted]}>
+              {lastReceipt ? 'Ready for the next customer' : 'Scan the first item'}
+            </Text>
 
           </View>
         }
