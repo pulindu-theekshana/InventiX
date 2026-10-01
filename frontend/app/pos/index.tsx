@@ -174,6 +174,23 @@ export default function Sell() {
       <ErrorBanner message={error} />
       <ErrorBanner message={stocks.error} />
 
+      {/*
+        The last bill stays on screen until the next one is finished. It used to disappear as
+        soon as an item was scanned, which is exactly when a customer asks for the number.
+      */}
+      {lastReceipt ? (
+        <Pressable
+          onPress={() => router.push(`/pos/returns?receipt=${encodeURIComponent(lastReceipt)}`)}
+          style={styles.lastBill}
+        >
+          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+          <Text style={[text.label, styles.flex]}>
+            Last bill <Text style={text.bodyStrong}>{lastReceipt}</Text>
+          </Text>
+          <Text style={[text.caption, { color: colors.accent }]}>Return</Text>
+        </Pressable>
+      ) : null}
+
       {query.trim().length > 0 ? (
         <View style={styles.results}>
           {matches.length === 0 ? (
@@ -202,11 +219,7 @@ export default function Sell() {
           <View style={styles.empty}>
             <Ionicons name="cart-outline" size={34} color={colors.textSubtle} />
             <Text style={[text.label, styles.muted]}>Scan the first item</Text>
-            {lastReceipt ? (
-              <Text style={[text.caption, { color: colors.success }]}>
-                {lastReceipt} saved
-              </Text>
-            ) : null}
+
           </View>
         }
         renderItem={({ item, index }) => (
@@ -347,6 +360,16 @@ const styles = StyleSheet.create({
   bar: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg },
   status: { alignItems: 'flex-end', gap: 2 },
   link: { alignItems: 'center', gap: 2 },
+  lastBill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.successBg,
+  },
   flex: { flex: 1 },
   flexTwo: { flex: 2 },
   muted: { color: colors.textMuted },

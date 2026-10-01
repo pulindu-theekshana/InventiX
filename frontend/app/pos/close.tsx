@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../src/components/ui/Button';
@@ -103,7 +103,16 @@ export default function Close() {
         <Text style={[text.label, styles.muted]}>Nothing sold yet today.</Text>
       ) : (
         bills.map((bill) => (
-          <View key={bill.id} style={styles.bill}>
+          /** A sale opens the return screen already loaded; a return has nothing to return. */
+          <Pressable
+            key={bill.id}
+            onPress={
+              bill.kind === 'sale'
+                ? () => router.push(`/pos/returns?receipt=${encodeURIComponent(bill.receipt_no)}`)
+                : undefined
+            }
+            style={styles.bill}
+          >
             <View style={styles.flex}>
               <Text style={text.bodyStrong}>
                 {bill.receipt_no}
@@ -123,7 +132,10 @@ export default function Close() {
               {bill.kind === 'return' ? '-' : ''}
               {currency(bill.total)}
             </Text>
-          </View>
+            {bill.kind === 'sale' ? (
+              <Ionicons name="chevron-forward" size={16} color={colors.textSubtle} />
+            ) : null}
+          </Pressable>
         ))
       )}
 

@@ -6,8 +6,9 @@
  * Look here when : A return cannot find a bill, or returns more than was sold.
  */
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
@@ -24,19 +25,21 @@ import type { Sale } from '../../src/types/api';
 
 export default function Returns() {
   const submit = useSubmit();
-  const [receipt, setReceipt] = useState('');
+  /** Set when the cashier tapped a bill on Day close, so nothing has to be typed. */
+  const { receipt: fromLink } = useLocalSearchParams<{ receipt?: string }>();
+  const [receipt, setReceipt] = useState(fromLink ?? '');
   const [bill, setBill] = useState<Sale | null>(null);
   const [coming, setComing] = useState<Record<string, number>>({});
   const [done, setDone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function find() {
+  const find = useCallback(async function find(value?: string) {
     setError(null);
     setDone(null);
     setBill(null);
     setComing({});
     try {
-      const found = await findSale(receipt.trim());
+      const found = await findSale((value ?? receipt).trim());
       setBill(found);
     } catch (e) {
       /**
@@ -45,7 +48,12 @@ export default function Returns() {
        */
       setError(e instanceof Error ? e.message : 'Could not reach the backend to find that bill.');
     }
-  }
+  }, [receipt]);
+
+  useEffect(() => {
+    if (fromLink) void find(fromLink);
+    // Only on arrival: re-running on every keystroke would fetch a bill per character.
+  }, [fromLink]);
 
   /** What is left on a line: sold, minus whatever has already come back. */
   function left(line: Sale['lines'][number]): number {
@@ -87,14 +95,14 @@ export default function Returns() {
         <Input
           value={receipt}
           onChangeText={setReceipt}
-          onSubmitEditing={find}
+          onSubmitEditing={() => find()}
           placeholder="Receipt number, e.g. T1-000147"
           icon="receipt-outline"
           autoCapitalize="characters"
-          autoFocus
+          autoFocus={!fromLink}
           containerStyle={styles.flex}
         />
-        <Button label="Find" variant="outline" onPress={find} disabled={!receipt.trim()} />
+        <Button label="Find" variant="outline" onPress={() => find()} disabled={!receipt.trim()} />
       </View>
 
       <ErrorBanner message={error} />
