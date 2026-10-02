@@ -117,6 +117,7 @@ export async function sync(): Promise<{ sent: number; left: number }> {
       try {
         await recordSale(row.sale);
         sent += 1;
+        console.info('[till] sent', row.sale.receipt_no);
       } catch (error) {
         /**
          * A 4xx is the backend saying this bill is wrong; sending it again changes nothing.
@@ -126,11 +127,18 @@ export async function sync(): Promise<{ sent: number; left: number }> {
          */
         const status = error instanceof ApiError ? error.status : 0;
         const permanent = status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
+        /**
+         * The name and status as well as the message: "Failed to fetch" alone cannot tell a
+         * dropped connection from a request that was never allowed to leave, and the two need
+         * different fixes.
+         */
+        const why = error instanceof Error ? `${error.name}: ${error.message}` : 'unknown error';
+        console.warn('[till] sale not sent', { receipt: row.sale.receipt_no, status, why });
         keep.push({
           ...row,
           status: permanent ? 'stuck' : 'waiting',
           attempts: row.attempts + 1,
-          lastError: error instanceof Error ? error.message : 'Could not reach the backend.',
+          lastError: status ? `${status}: ${why}` : why,
         });
       }
     }

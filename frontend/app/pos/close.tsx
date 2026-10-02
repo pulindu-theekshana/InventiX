@@ -19,6 +19,7 @@ import { currency } from '../../src/lib/format';
 import { usePosQueue } from '../../src/hooks/usePosQueue';
 import * as shift from '../../src/pos/shift';
 import { daySummary, listSales } from '../../src/api/pos';
+import { API_BASE_URL } from '../../src/api/client';
 import type { DaySummary, Sale } from '../../src/types/api';
 
 export default function Close() {
@@ -66,7 +67,7 @@ export default function Close() {
             {outbox.waiting > 0 ? `${outbox.waiting} bill(s) not sent yet. ` : ''}
             {outbox.stuck > 0 ? `${outbox.stuck} rejected. ` : ''}
             Today&apos;s figures are missing them.
-            {outbox.error ? ` (${outbox.error})` : ''}
+            {outbox.error ? ` (${outbox.error} — sending to ${API_BASE_URL})` : ''}
           </Text>
           <Button label="Try now" variant="outline" onPress={() => outbox.syncNow().then(load)} />
         </View>
