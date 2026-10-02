@@ -31,6 +31,9 @@ type Listener = () => void;
 const listeners = new Set<Listener>();
 let cache: QueuedSale[] | null = null;
 let syncing = false;
+/** When the current run started, so a run that somehow hangs cannot block the queue for ever. */
+let syncStartedAt = 0;
+const RUN_LOOKS_STUCK_MS = 60_000;
 
 /**
  * AsyncStorage, not a database: a day of bills is a few hundred small rows, and this is one
@@ -96,8 +99,11 @@ export async function enqueue(sale: SalePayload): Promise<void> {
  * that is already struggling with its connection.
  */
 export async function sync(): Promise<{ sent: number; left: number }> {
-  if (syncing) return { sent: 0, left: (await load()).length };
+  if (syncing && Date.now() - syncStartedAt < RUN_LOOKS_STUCK_MS) {
+    return { sent: 0, left: (await load()).length };
+  }
   syncing = true;
+  syncStartedAt = Date.now();
   try {
     const rows = await load();
     const keep: QueuedSale[] = [];
@@ -140,6 +146,12 @@ export async function sync(): Promise<{ sent: number; left: number }> {
  * Removes a bill the backend will never accept, once the owner has seen it. Deliberately manual:
  * dropping a sale silently is how takings go missing.
  */
+/** The newest failure, so a screen can say why rather than only how many. */
+export async function lastError(): Promise<string | null> {
+  const rows = await load();
+  return rows.find((r) => r.lastError)?.lastError ?? null;
+}
+
 export async function discard(clientSaleId: string): Promise<void> {
   const rows = await load();
   await save(rows.filter((r) => r.sale.client_sale_id !== clientSaleId));

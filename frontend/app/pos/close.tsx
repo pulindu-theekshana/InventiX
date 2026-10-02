@@ -66,6 +66,7 @@ export default function Close() {
             {outbox.waiting > 0 ? `${outbox.waiting} bill(s) not sent yet. ` : ''}
             {outbox.stuck > 0 ? `${outbox.stuck} rejected. ` : ''}
             Today&apos;s figures are missing them.
+            {outbox.error ? ` (${outbox.error})` : ''}
           </Text>
           <Button label="Try now" variant="outline" onPress={() => outbox.syncNow().then(load)} />
         </View>

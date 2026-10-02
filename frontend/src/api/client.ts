@@ -22,6 +22,9 @@ export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
  */
 export const useMockData = !API_BASE_URL;
 
+/** Long enough for a slow phone network, short enough that a hung request is noticed. */
+const REQUEST_TIMEOUT_MS = 20_000;
+
 /** Lets a screen show "showing sample data" rather than pretending the numbers are real. */
 export const MOCK_NOTICE = 'Sample data — the backend is not connected yet.';
 
@@ -39,8 +42,16 @@ export async function request<T>(path: string, init: RequestInit = {}, retried =
    */
   const isForm = typeof FormData !== 'undefined' && init.body instanceof FormData;
 
+  /**
+   * A request that never answers is worse than one that fails: the till's send queue waits on it
+   * for ever and stops retrying, so sales sit on the laptop while the shop believes they are
+   * sent. A dropped WiFi or a backend restarting mid-request does exactly that.
+   */
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
+    signal: init.signal ?? timeout,
     headers: {
       ...(isForm ? {} : { 'Content-Type': 'application/json' }),
       ...(await authHeader()),

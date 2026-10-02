@@ -19,6 +19,7 @@ const RETRY_MS = 20_000;
 export function usePosQueue() {
   const [waiting, setWaiting] = useState(0);
   const [stuck, setStuck] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -28,6 +29,7 @@ export function usePosQueue() {
       if (!alive) return;
       setWaiting(counts.waiting);
       setStuck(counts.stuck);
+      setError(await queue.lastError());
     }
 
     refresh();
@@ -49,6 +51,8 @@ export function usePosQueue() {
   return {
     waiting,
     stuck,
+    /** Why the last attempt failed. Shown so "not sent" is not a mystery. */
+    error,
     /** The owner pressing "try now", after fixing the WiFi. */
     syncNow: () => queue.sync(),
   };
