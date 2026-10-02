@@ -14,6 +14,34 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 
 ---
 
+## 2026-10-03 - Phase 7: printing, scanning, and installing on the laptop
+**Added.** Till activity for the owner: `GET /customer/pos/activity` and **Reports -> Till — who
+sold what**. Takings per cashier over a day, a week or a month, and every discount and return with
+the name of the account that rang it. Owner only; no new SQL, it reads what phase 6 stamps.
+
+**Added.** A printed receipt (`src/pos/receipt.ts`), from the till's last bill and from any bill
+the returns screen finds. Markup and `window.print()` into a hidden iframe — a thermal roll
+printer on a laptop is an ordinary printer to the browser, so there is no driver and no
+dependency.
+
+**Added.** Installable till: `public/manifest.webmanifest`, `public/sw.js` and
+`public/index.html`. Opens from a desktop icon in its own window, and starts with no connection.
+`npm run build:web` and `npm run serve:web`.
+
+**Added.** A "newer version is ready — reload now" bar instead of a worker that takes over
+mid-sale, and `src/components/UpdateReady.tsx` behind it.
+
+**Changed.** A character typed anywhere on the till now starts a search, so a scan after a tap on
+a stepper or a payment button is not lost.
+
+**Changed.** The Reports sales tab no longer says it is waiting for an uploaded POS file: sales
+from the shop's own till are already counted.
+
+**Not built.** Phase 8, the packaged `.exe`. `docs/16-pos-system.md` says what it would take and
+when it is worth it.
+
+**Decisions.** D-023, D-024.
+
 ## 2026-10-02 - Phase 6: cashier accounts
 **Added.** Staff logins. The owner types a name and a password in till settings and gets back a
 login address for that person; they sign in at the normal screen and land on the till. New role

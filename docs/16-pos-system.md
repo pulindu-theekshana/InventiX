@@ -3,7 +3,7 @@
 What it is, how it fits the system that already exists, and why each decision was made that way.
 Written as it is built, one phase at a time.
 
-Last updated 2 October 2026 — phases 1 to 6 complete: the backend, the outbox, the sell screen, returns, day close, who may use the till, and cashier accounts.
+Last updated 3 October 2026 — phases 1 to 7 complete: the backend, the outbox, the sell screen, returns, day close, who may use the till, cashier accounts, the owner's view of the counter, receipt printing and installing on the laptop. Phase 8 is written up, not built.
 
 ---
 
@@ -427,15 +427,150 @@ things cannot be checked that way.
 
 ---
 
+## Owner's till view — what was built
+
+`GET /customer/pos/activity?from=&to=` and a screen under Reports: **Till — who sold what**.
+
+- Takings per cashier over a day, a week or a month: bills, total, what they discounted, what
+  they gave back.
+- Every discount and every return, newest first, each with the name of the account that was
+  signed in, the receipt number and the time. One marked when it was above the shop's limit.
+- Read from the owner's own phone. Day close answers "does the drawer match" for one till on one
+  day; this answers "who did what" from anywhere.
+
+Owner only — `require_customer`, so a cashier asking for it gets 403. Grouped by `cashier_id`
+where there is one, and by the typed label for bills taken before accounts existed; the screen
+says which is which rather than mixing them silently. No new SQL: it reads what phase 6 stamps.
+
+---
+
+## Phase 7 — what was built
+
+### A printed receipt
+
+`src/pos/receipt.ts`. A thermal roll printer plugged into a laptop is an ordinary printer to the
+browser, so a receipt is markup and `window.print()` — no driver, no dependency, nothing to
+install. The page is laid out for a 72mm roll and stacks rather than positions, so the same
+markup prints on A4 when the shop has no roll printer yet.
+
+Printed into a hidden iframe rather than a new window: a popup blocker can stop `window.open`,
+and the till must not lose focus mid-rush.
+
+- From the till, on the last bill.
+- From the returns screen, on any bill it finds — which is how a customer who lost their slip
+  gets a copy, and how the owner prints one from day close.
+
+**The dialog.** Chrome asks every time. A shop that prints every bill starts Chrome once with
+`--kiosk-printing` and it stops asking; that is a shortcut on their desktop, not code.
+
+### The scanner
+
+A barcode scanner is a keyboard: it types the code and presses Enter. That already worked while
+the cursor sat in the search box — but after a tap on a quantity stepper or a payment button the
+cursor is not there, and the first scan of the next customer went nowhere.
+
+Any character typed outside a text field is now taken as the start of a scan: the search box is
+focused and the character is inserted by hand, because leaving the browser to deliver a key to an
+element focused during that same keystroke loses the first digit. Space and Enter are left alone —
+they belong to whatever button has focus.
+
+### Installing it on the laptop
+
+The till is a web app, so "installing" means Chrome's own install: `public/manifest.webmanifest`
+plus a service worker in `public/sw.js`. It opens from a desktop icon, in its own window, with no
+address bar — which also means no address bar for a cashier to type `/stocks` into.
+
+```
+npm run build:web     # exports to dist/
+npm run serve:web     # serves it at http://localhost:8099
+```
+
+Then open `http://localhost:8099` in Chrome on the shop's laptop and use the install icon in the
+address bar.
+
+**Why localhost rather than the LAN address.** A browser only allows a service worker on `https`
+or on `localhost`, so the offline shell needs the till to be served from the machine it runs on —
+which is exactly where a till runs anyway. Over `http://192.168.x.x` the app still works; it just
+has no offline shell.
+
+**Three decisions worth defending**
+
+**The worker is registered only for a built export.** In development Metro serves a fresh bundle
+on every save, and a worker caching that is a morning spent asking why a change will not show.
+The test is the bundle's own path: an export loads `/_expo/static/js/web/entry-<hash>.js`, the dev
+server loads `/index.bundle?platform=web`.
+
+**A new version waits for the cashier.** The usual advice is `skipWaiting`, which lets a new build
+take over the moment it arrives — at a till, that is the screen reloading while a customer is
+mid-bill. Instead the page shows "a newer version of the till is ready" and reloads when the
+person says so. Queued sales survive either way; a half-built bill does not.
+
+**The HTML lives in `public/index.html`.** `app/+html.tsx` is only rendered by static output, and
+static output pre-renders in Node, where `window is not defined` crashed the build (that is why
+`app.json` says `output: single`). Expo copies `public/` to the root of the export and injects
+the bundle's script tag into that template.
+
+### What is still only half true
+
+- **Offline is the app's files, not its data.** The catalog the till searches is fetched from the
+  backend; a till opened cold with no connection has the screens but no products until it
+  reaches the backend once. Sales already queue on the device.
+- A static host must send unknown paths to `index.html`, or a reload on `/pos` is a 404. The
+  manifest therefore starts the app at `/`, which routes by role anyway.
+- `npx expo serve` does not do that fallback, so use it for the install test, not as the shop's
+  long-term server.
+- The service worker was syntax-checked and the export was served and opened, but **registration
+  itself is untested**: the browser this was built in refuses to register one. The install icon
+  appearing in Chrome is the proof, and that is the first thing to try.
+
+---
+
+## Phase 8 — a packaged .exe, and whether it is worth it
+
+Not built. What it would take, so the decision is a decision rather than a guess.
+
+**How.** [Tauri](https://tauri.app) wraps the same `dist/` in a native window:
+
+```
+rustup           # the Rust toolchain
+Microsoft C++ Build Tools   # Windows linker, ~2GB
+npm i -D @tauri-apps/cli
+npx tauri init   # point it at ../dist, dev URL http://localhost:8081
+npx tauri build  # -> src-tauri/target/release/bundle/msi/InventiX_1.0.0_x64_en-US.msi
+```
+
+Nothing in the app changes. The web build is the product; Tauri is a frame around it.
+
+**What it buys that a PWA cannot have**
+
+| | PWA | `.exe` |
+|---|---|---|
+| Cash drawer kick | no | yes — ESC/POS over the serial or USB port |
+| Printing without a dialog | Chrome flag | yes, direct to the printer |
+| Storage | browser storage, which the person can clear | SQLite in a file |
+| Install | one click in Chrome | a file to copy to each laptop |
+| Fixing a bug | redeploy; the shop reloads | build and distribute a new file |
+
+**When it is worth it.** When a shop buys a cash drawer, or when a cleared browser loses a day of
+queued bills. Not before: the cost is a toolchain on the build machine and a new file for every
+fix, which is the thing the web version makes free.
+
+**If it is built,** the honest order is: SQLite for the outbox first (it is the real weakness),
+drawer and silent printing second, auto-update third.
+
+---
+
 ## Still to build
 
-- **Owner's till view:** takings, and every discount and return per cashier, over a date range, in
-  the owner's own app. Worth building now: `cashier_id` makes the name on a bill trustworthy.
-- **Phase 7:** install on the laptop as a PWA, receipt printing and scanner behaviour
-- **Phase 8, only if needed:** a packaged `.exe`
+- **A cashier password reset**, so a forgotten one does not mean a new login.
+- **The discount limit enforced on the server**, which needs an approval the server can verify.
+- **Sturdier offline storage** (SQLite), which is the first real reason to want phase 8.
+- **Phase 8, only if needed:** a packaged `.exe` — written up above.
 
 ## Known limits
 
+- The offline shell keeps the app's files, not the shop's catalog: a till opened cold with no
+  connection has its screens but no products until it reaches the backend once.
 - A cashier signs in with a made-up address on a domain nobody owns. Harmless while no mail is sent
   to it, and it means Supabase's own password reset cannot be used for staff.
 - While a till is offline the owner's phone shows stale stock. It catches up on reconnect.

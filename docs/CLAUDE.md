@@ -134,6 +134,21 @@ not match the `exp://<ip>:8081/--/` address, even entered exactly, so it fell ba
 Workaround for testing: set the Site URL itself to `exp://<laptop ip>:8081/--/` (changes with the
 network). For a real build set it to `inventix://`.
 
+**The web HTML template is `frontend/public/index.html`, not `app/+html.tsx`.** `+html.tsx` is
+only rendered by `output: static`, and static pre-renders in Node where `window is not defined`
+crashes the build — which is why `app.json` says `output: single`. Expo copies `public/` to the
+root of the export and injects the bundle's script tag into that template. The script tag is
+injected at the *end* of the body, so anything inline that looks for it must wait for `load`.
+
+**The service worker is registered only for a built export.** In development Metro serves a fresh
+bundle on every save; a worker caching that is a morning spent asking why a change will not show.
+The guard is the bundle path: an export loads `/_expo/static/js/web/entry-<hash>.js`, the dev
+server loads `/index.bundle?platform=web`. A browser also refuses a worker outside https or
+localhost, so the LAN address has no offline shell by design.
+
+**`npx expo serve` does not fall back to index.html.** `/pos` is a 404 there, which is why the
+manifest starts the app at `/`. Any real static host for this build needs the fallback configured.
+
 **Upload rows live in memory between steps** (`_pending` in `uploads/service.py`). Editing a backend
 file restarts uvicorn and loses them, so do not edit the backend while someone is mid-upload.
 

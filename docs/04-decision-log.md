@@ -431,3 +431,58 @@ login.
 `backend/app/feeds/customer/stocks/routes.py`, `frontend/app/pos/`,
 `frontend/src/pos/settings.ts`, `frontend/src/hooks/useAuth.ts`, `frontend/src/stores/authStore.ts`.
 Removed `frontend/app/pos/shift.tsx` and `frontend/src/pos/shift.ts`.
+
+
+## D-023 - The owner reads the counter from Reports, not from the till
+
+**Decision.** `GET /customer/pos/activity` takes a date range and returns takings per cashier plus
+every discount and every return, each with the account that was signed in. It is owner-only
+(`require_customer`) and reached from Reports, so it works from the owner's phone. Day close keeps
+its job: one till, one day, does the drawer match.
+
+**Reason.** Phase 6 made the name on a bill trustworthy; without something that reads it, that is a
+column nobody looks at. The question an owner actually asks -- "who did this, and is any of it
+odd" -- is not the question day close answers, and answering it should not require standing at the
+counter after closing.
+
+**Alternatives.** Extending day close to a range (rejected: it is the cashier's screen, and the
+cashier is the person this is partly about). A report file to generate (rejected: this is a thing
+to glance at, not to produce). Grouping in SQL with a view (rejected for now: a month of a small
+shop's bills is hundreds of rows, and PostgREST cannot group without one -- the 31 day cap is what
+keeps that honest).
+
+**Known limit.** Flagging is detection, not prevention: a bill above the limit is listed, not
+stopped. Enforcing the limit server-side needs an approval the server can verify, which the
+offline till cannot give it today.
+
+**Affects.** Spec 6.6 and 7. `backend/app/feeds/customer/pos/{schemas,service,routes}.py`,
+`frontend/app/(customer)/reports/{till.tsx,index.tsx,_layout.tsx}`, `frontend/src/api/pos.ts`.
+
+
+## D-024 - The till is installed, not packaged
+
+**Decision.** The counter runs the exported web build, installed from Chrome as a PWA: a manifest,
+an app icon, its own window, and a service worker that keeps the app's files so it opens with no
+connection. Receipts are markup printed through the browser. A packaged `.exe` (Tauri) is written
+up but not built.
+
+**Reason.** Everything a small shop needs from a till -- a window with no address bar, a desktop
+icon, offline start, a printed slip -- the browser already does. An `.exe` adds a Rust toolchain on
+the build machine and a file to redistribute for every fix, in exchange for a cash drawer kick and
+sturdier storage, neither of which this shop has asked for yet.
+
+**Alternatives.** Tauri now (deferred: see the phase 8 section for exactly what it buys and the
+order to build it in). Static output with `+html.tsx` (rejected: it pre-renders in Node and
+`window is not defined` crashes the build; the HTML template lives in `public/index.html`
+instead). `skipWaiting` on the service worker, the usual advice (rejected: a new build taking over
+while a customer is mid-bill is a lost bill -- the cashier is asked instead).
+
+**Known limits.** A service worker needs https or localhost, so the offline shell wants the till
+served from the laptop it runs on. The shell caches the app, not the catalog. Chrome shows a print
+dialog per bill unless the shop starts it with `--kiosk-printing`. Registration itself is the one
+thing that could not be verified here: this browser refuses to register a worker, so the install
+icon appearing in Chrome is the real check.
+
+**Affects.** Spec 6.6. `frontend/public/{index.html,manifest.webmanifest,sw.js}`,
+`frontend/src/pos/receipt.ts`, `frontend/src/components/UpdateReady.tsx`,
+`frontend/app/pos/{index,returns}.tsx`, `frontend/package.json`.
