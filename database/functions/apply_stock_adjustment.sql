@@ -26,6 +26,8 @@
 -- Running as the owner bypasses row level security, so the ownership check the
 -- policy would have made is made here instead. auth.uid() is null when the
 -- backend calls with the service key, which is already trusted and unrestricted.
+--
+-- Kept in step with migration 0029, which is the copy the database actually ran.
 
 create or replace function apply_stock_adjustment(
   p_stock_item_id uuid,
@@ -54,7 +56,9 @@ begin
     raise exception 'stock item % not found', p_stock_item_id;
   end if;
 
-  if auth.uid() is not null and v_owner <> auth.uid() then
+  -- app_shop_id() rather than auth.uid(): a cashier account (migration 0029) is a different
+  -- user acting on their shop's stock. Anyone else is still refused.
+  if auth.uid() is not null and v_owner <> app_shop_id() then
     raise exception 'that stock item does not belong to you';
   end if;
 

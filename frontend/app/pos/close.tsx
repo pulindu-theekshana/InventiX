@@ -17,13 +17,15 @@ import { radius, spacing } from '../../src/theme/spacing';
 import { text } from '../../src/theme/typography';
 import { currency } from '../../src/lib/format';
 import { usePosQueue } from '../../src/hooks/usePosQueue';
-import * as shift from '../../src/pos/shift';
+import { useAuth } from '../../src/hooks/useAuth';
+import { signOut } from '../../src/stores/authStore';
 import { daySummary, listSales } from '../../src/api/pos';
 import { API_BASE_URL } from '../../src/api/client';
 import type { DaySummary, Sale } from '../../src/types/api';
 
 export default function Close() {
   const outbox = usePosQueue();
+  const { isCashier } = useAuth();
   const [summary, setSummary] = useState<DaySummary | null>(null);
   const [bills, setBills] = useState<Sale[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -169,17 +171,20 @@ export default function Close() {
         onPress={() => router.replace('/pos')}
         fullWidth
       />
-      {/* Handing over at the end of a shift. The next person starts their own, under their name. */}
-      <Button
-        label="End this shift"
-        variant="outline"
-        icon="log-out-outline"
-        onPress={async () => {
-          await shift.end();
-          router.replace('/pos/shift');
-        }}
-        fullWidth
-      />
+      {/* Handing over. Signing out is the end of a shift now that the person at the counter is
+          an account: the next one signs in, and their bills carry their own name. */}
+      {isCashier ? (
+        <Button
+          label="End shift and sign out"
+          variant="outline"
+          icon="log-out-outline"
+          onPress={async () => {
+            await signOut();
+            router.replace('/(auth)/login');
+          }}
+          fullWidth
+        />
+      ) : null}
     </ScrollView>
   );
 }

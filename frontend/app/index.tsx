@@ -17,5 +17,7 @@ export default function Index() {
    * Spec 4.2: the role comes from the profile row, never from anything the user picked at
    * launch. A signed-in user is never asked to choose again.
    */
+  // A cashier account has no feeds: the till is the whole application for them.
+  if (role === 'cashier') return <Redirect href="/pos" />;
   return <Redirect href={role === 'supplier' ? '/(supplier)/listings' : '/(customer)/stocks'} />;
 }

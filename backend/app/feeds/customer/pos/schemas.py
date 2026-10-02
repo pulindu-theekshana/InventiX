@@ -14,6 +14,12 @@ from ....domain import pos as rules
 
 
 class CashierIn(BaseModel):
+    """
+    A name and a PIN kept on the shop's record. Superseded by cashier accounts (migration 0029),
+    which are real logins; this stays so a shop that set PINs in phase 5 does not have its row
+    rewritten, and so old settings still parse.
+    """
+
     name: str = Field(min_length=1, max_length=60)
     # Hashed on the device: the server has no use for the number itself, and storing it would
     # make a shop's PINs readable by anyone who ever reads a backup.
@@ -36,6 +42,24 @@ class PosSettingsOut(BaseModel):
     cashiers: list[CashierIn] = []
 
 
+class CashierAccountIn(BaseModel):
+    """What the owner types to give someone their own login."""
+
+    name: str = Field(min_length=2, max_length=60)
+    # Supabase's own minimum. Typed by the owner rather than generated, because a password the
+    # owner chose is one they can tell the cashier without a screenshot.
+    password: str = Field(min_length=6, max_length=72)
+
+
+class CashierAccountOut(BaseModel):
+    id: str
+    name: str
+    # Made for them, because a shop assistant may have no email address. It is only ever typed
+    # into the till's sign-in screen.
+    login_email: str
+    is_active: bool = True
+
+
 class SaleLineIn(BaseModel):
     catalog_product_id: str
     # Null when the shop does not track the product in Stocks. The sale is still recorded.
@@ -55,6 +79,8 @@ class SaleIn(BaseModel):
     sold_at: datetime
     payment_method: str = "cash"
     discount: float = Field(default=0, ge=0)
+    # Ignored since migration 0029: the name on a bill is the signed-in account's, not a label
+    # the till can choose. Still accepted so bills queued by an older till still send.
     cashier_label: str | None = Field(default=None, max_length=60)
     lines: list[SaleLineIn] = Field(min_length=1)
 
@@ -125,7 +151,7 @@ class SaleOut(BaseModel):
 
 
 class CashierTotalOut(BaseModel):
-    """Takings per cashier. Phase 5 fills `cashier` with a real person; until then it is None."""
+    """Takings per cashier. The name comes from the account that was signed in (0029)."""
 
     cashier: str | None = None
     bills: int

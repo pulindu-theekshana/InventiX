@@ -14,3 +14,9 @@ create policy stock_items_own on stock_items
   for all
   using (owner_id = auth.uid())
   with check (owner_id = auth.uid());
+
+-- Migration 0029 adds a second read policy for cashier accounts: a cashier is a different user
+-- id working on this shop's rows, so the condition becomes app_shop_id() rather than auth.uid().
+-- Reads only -- a cashier never writes stock directly; their sales go through the backend.
+create policy stock_items_till_read on stock_items
+  for select using (owner_id = app_shop_id());

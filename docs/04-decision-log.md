@@ -397,3 +397,37 @@ owner to sort out by hand (rejected: it is recoverable without them).
 
 **Affects.** Spec §6.6. `backend/app/feeds/customer/pos/{service,routes}.py`,
 `frontend/src/pos/{device,queue}.ts`.
+
+
+## D-022 - A cashier is an account, not a name on a list
+
+**Decision.** `profiles.role` gains `'cashier'` and an `employer_id` naming the shop. The owner
+creates the login from till settings; the backend answers one question in one place
+(`CurrentUser.shop_id`), the database answers the same one (`app_shop_id()`), and the only routes a
+cashier may reach are the till's own plus `GET /customer/stocks`, which the till searches to build
+a bill. `pos_sales.cashier_id` and the name on a bill are stamped from the token, and the till's
+`cashier_label` is ignored.
+
+**Reason.** Phase 5 locked screens: the account at the counter was still the owner's, so the name
+on a bill was worth exactly as much as the honesty of whoever typed a four digit PIN, and the token
+in that browser could reach every endpoint the owner could. An owner asking "who did this" needs an
+answer that survives being disputed, and that answer has to come from something the till cannot
+choose.
+
+**Alternatives.** Keeping the PIN list (rejected: it is the weakest version of identity, and
+running it beside accounts gives two answers that can disagree). One shared cashier login per shop
+(rejected: it names a role, not a person, which is the problem again). Enforcing the discount limit
+on the server (deferred: the server cannot verify an approval typed on a device, and doing it
+properly means the owner approving from their phone, which fails exactly when the till is offline).
+
+**Known limits, stated rather than hidden.** A cashier can read the shop's stock list, because the
+till searches it, and with it the catalog and the listing prices every signed-in user may read. The owner's PIN hash is readable by a signed-in cashier, because approval must
+work offline. Limits are still a guard on the device. A forgotten cashier password means a new
+login.
+
+**Affects.** Spec 6.6 and 15.2. `database/migrations/0029_cashier_accounts.sql`,
+`database/policies/{profiles,stock_items}.sql`, `database/functions/apply_stock_adjustment.sql`,
+`backend/app/dependencies.py`, `backend/app/feeds/customer/pos/`,
+`backend/app/feeds/customer/stocks/routes.py`, `frontend/app/pos/`,
+`frontend/src/pos/settings.ts`, `frontend/src/hooks/useAuth.ts`, `frontend/src/stores/authStore.ts`.
+Removed `frontend/app/pos/shift.tsx` and `frontend/src/pos/shift.ts`.

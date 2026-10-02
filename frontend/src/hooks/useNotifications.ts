@@ -9,7 +9,7 @@
 import { useAsync } from './useAsync';
 import { useRealtime } from './useRealtime';
 import { listNotifications } from '../api/notifications';
-import type { AppNotification, Role } from '../types/database';
+import type { AccountRole, AppNotification } from '../types/database';
 
 export function useNotifications() {
   const state = useAsync(() => listNotifications(), []);
@@ -37,7 +37,7 @@ export function useNotifications() {
  * also decides what "this order" means: the shop tracks it under Delivery, the supplier acts
  * on it under Orders.
  */
-export function routeFor(n: AppNotification, role: Role | null): string {
+export function routeFor(n: AppNotification, role: AccountRole | null): string {
   if (role === 'supplier') {
     if (n.related_order_id) return '/(supplier)/orders/' + n.related_order_id;
     return '/notifications';

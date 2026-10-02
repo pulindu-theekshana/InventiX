@@ -7,6 +7,8 @@ Look here when : A sale is stored twice, stock does not drop after a sale, or th
 """
 
 import logging
+import re
+import secrets
 from datetime import date
 from decimal import Decimal
 
@@ -15,6 +17,8 @@ from ....core.supabase import service_client
 from ....domain import pos as rules
 from ....domain import seasonal, stock
 from .schemas import (
+    CashierAccountIn,
+    CashierAccountOut,
     CashierTotalOut,
     DaySummaryOut,
     PosSettingsIn,
@@ -59,7 +63,7 @@ def _out(row: dict) -> SaleOut:
     )
 
 
-def record_sale(db, owner_id: str, data: SaleIn) -> SaleOut:
+def record_sale(db, owner_id: str, data: SaleIn, actor_id: str, actor_name: str) -> SaleOut:
     """
     A bill the till has already finished. The customer has paid and left: this is a record of
     something that happened, not a request for permission, so it is never refused over stock
@@ -67,6 +71,10 @@ def record_sale(db, owner_id: str, data: SaleIn) -> SaleOut:
 
     Sent again after a timeout, it returns the first result rather than billing twice -- the
     same guarantee ordering gets, enforced by a unique constraint rather than by remembering.
+
+    `actor_id` and `actor_name` come from the token, never from the body. Before cashier
+    accounts the till sent the name it had been given, which made the signature on a bill worth
+    exactly as much as the honesty of whoever typed it.
     """
     existing = (
         db.table("pos_sales").select(SELECT)
@@ -108,7 +116,8 @@ def record_sale(db, owner_id: str, data: SaleIn) -> SaleOut:
             "payment_method": data.payment_method,
             "discount": float(rules.money(data.discount)),
             "total": float(total),
-            "cashier_label": data.cashier_label,
+            "cashier_id": actor_id,
+            "cashier_label": actor_name,
             "client_sale_id": data.client_sale_id,
         }).execute().data[0]
     except Exception as exc:
@@ -150,7 +159,7 @@ def record_sale(db, owner_id: str, data: SaleIn) -> SaleOut:
         for line in data.lines
     ]).execute()
 
-    _move_stock(db, owner_id, sale["id"], data.lines, stock_rows)
+    _move_stock(db, actor_id, sale["id"], data.lines, stock_rows)
 
     created = (
         db.table("pos_sales").select(SELECT).eq("id", sale["id"]).maybe_single().execute()
@@ -158,7 +167,7 @@ def record_sale(db, owner_id: str, data: SaleIn) -> SaleOut:
     return _out(created.data)
 
 
-def _move_stock(db, owner_id: str, sale_id: str, lines, stock_rows: dict) -> None:
+def _move_stock(db, actor_id: str, sale_id: str, lines, stock_rows: dict) -> None:
     """
     Through domain/stock.apply, so the quantity and its audit row commit together -- a sale is
     not allowed to be the one quantity change nobody can explain afterwards.
@@ -175,13 +184,14 @@ def _move_stock(db, owner_id: str, sale_id: str, lines, stock_rows: dict) -> Non
         if change <= 0:
             continue
         try:
-            stock.apply(db, line.stock_item_id, -change, "pos_sale", owner_id, sale_id)
+            # actor_id, so the audit row names the person at the counter rather than the shop.
+            stock.apply(db, line.stock_item_id, -change, "pos_sale", actor_id, sale_id)
         except Exception:
             log.exception("stock did not move for line %s on sale %s",
                           line.stock_item_id, sale_id)
 
 
-def record_return(db, owner_id: str, data: ReturnIn) -> SaleOut:
+def record_return(db, owner_id: str, data: ReturnIn, actor_id: str, actor_name: str) -> SaleOut:
     """
     Goods coming back against a bill this shop issued.
 
@@ -241,7 +251,8 @@ def record_return(db, owner_id: str, data: ReturnIn) -> SaleOut:
         "payment_method": "cash",
         "discount": 0,
         "total": float(total),
-        "cashier_label": data.cashier_label,
+        "cashier_id": actor_id,
+        "cashier_label": actor_name,
         "client_sale_id": data.client_sale_id,
     }).execute().data[0]
 
@@ -291,7 +302,7 @@ def record_return(db, owner_id: str, data: ReturnIn) -> SaleOut:
         if change <= 0:
             continue
         try:
-            stock.apply(db, stock_item_id, change, "return", owner_id, ret["id"])
+            stock.apply(db, stock_item_id, change, "return", actor_id, ret["id"])
         except Exception:
             log.exception("stock did not come back for %s on return %s", stock_item_id, ret["id"])
 
@@ -426,3 +437,109 @@ def next_receipt(db, owner_id: str, device_id: str) -> str:
         if tail.isdigit():
             highest = max(highest, int(tail))
     return f"{device_id}-{highest + 1:06d}"
+
+
+# ---------------------------------------------------------------------------
+# Cashier accounts
+# ---------------------------------------------------------------------------
+# A cashier account is an ordinary Supabase user with a profile whose role is 'cashier' and
+# whose employer_id is this shop. That is the whole mechanism: the database policies and
+# dependencies.py both ask app_shop_id()/shop_id, so nothing else had to learn about staff.
+#
+# Created here with the service key, for the same reason registration is (feeds/shared/auth):
+# a client that can write its own profile row can give itself a role.
+
+# A shop assistant may well have no email address, so the till makes one. No mail is ever sent
+# to it -- it is a username that happens to be shaped like an address, because Supabase signs
+# people in by email.
+LOGIN_DOMAIN = "till.inventix.app"
+
+
+def _login_email(name: str) -> str:
+    """nimal.3f8a1c@till.inventix.app -- short enough to type at a counter, unique per account."""
+    slug = re.sub(r"[^a-z0-9]+", "", name.lower())[:12] or "cashier"
+    return f"{slug}.{secrets.token_hex(3)}@{LOGIN_DOMAIN}"
+
+
+def list_cashiers(owner_id: str) -> list[CashierAccountOut]:
+    """Only the ones still working here. A removed account stays in the table so the bills it
+    rang keep their name, but it has no business on the owner's list."""
+    rows = (
+        service_client().table("profiles")
+        .select("id, contact_person, email, is_active")
+        .eq("employer_id", owner_id).eq("role", "cashier").eq("is_active", True)
+        .order("contact_person")
+        .execute().data or []
+    )
+    return [
+        CashierAccountOut(
+            id=row["id"],
+            name=row["contact_person"],
+            login_email=row["email"],
+            is_active=row["is_active"],
+        )
+        for row in rows
+    ]
+
+
+def create_cashier(owner_id: str, data: CashierAccountIn) -> CashierAccountOut:
+    """
+    Makes the login and the profile that ties it to this shop.
+
+    email_confirm is set so the account works immediately: there is no inbox to confirm from,
+    and an unconfirmed user cannot sign in.
+    """
+    db = service_client()
+
+    shop = (
+        db.table("profiles").select("business_name, phone")
+        .eq("id", owner_id).maybe_single().execute()
+    )
+    if not shop or not shop.data:
+        raise NotFound("We could not find your shop's profile.")
+
+    name = data.name.strip()
+    if any(c.name.lower() == name.lower() for c in list_cashiers(owner_id)):
+        raise Conflict("Someone with that name already has a login.")
+
+    email = _login_email(name)
+    created = db.auth.admin.create_user({
+        "email": email,
+        "password": data.password,
+        "email_confirm": True,
+    })
+    user_id = created.user.id
+
+    try:
+        db.table("profiles").insert({
+            "id": user_id,
+            "role": "cashier",
+            "employer_id": owner_id,
+            # The shop's name, so the till's header reads the same for everyone standing at it.
+            "business_name": shop.data["business_name"],
+            "contact_person": name,
+            "phone": shop.data["phone"],
+            "email": email,
+        }).execute()
+    except Exception:
+        # Without this the shop would be left with a login that can sign in and has no profile,
+        # which every request then reports as an incomplete account nobody can finish.
+        db.auth.admin.delete_user(user_id)
+        raise
+
+    return CashierAccountOut(id=user_id, name=name, login_email=email)
+
+
+def remove_cashier(owner_id: str, cashier_id: str) -> None:
+    """
+    Switches the account off rather than deleting it: get_current_user refuses an inactive
+    account, and every bill they rang keeps a name that still resolves to a person.
+    """
+    row = (
+        service_client().table("profiles").select("id")
+        .eq("id", cashier_id).eq("employer_id", owner_id).eq("role", "cashier")
+        .maybe_single().execute()
+    )
+    if not row or not row.data:
+        raise NotFound("That cashier is not one of yours.")
+    service_client().table("profiles").update({"is_active": False}).eq("id", cashier_id).execute()

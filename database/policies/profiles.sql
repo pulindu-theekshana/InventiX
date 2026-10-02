@@ -47,3 +47,16 @@ create policy profiles_update_own on profiles
 -- becomes decorative.
 --
 -- There is also no delete policy. Deleting the auth user cascades to the profile.
+
+-- ---------------------------------------------------------------------------
+-- Migration 0029: cashier accounts.
+--
+-- coalesce(employer_id, id): an owner is their own shop, a cashier works for one. Every policy
+-- that used to ask "is this row yours" now asks "is this row your shop's", in one place.
+create or replace function app_shop_id() returns uuid
+language sql stable security definer set search_path = public
+as $$ select coalesce(employer_id, id) from profiles where id = auth.uid() $$;
+
+-- So the till can show the shop's name while a cashier is signed in.
+create policy profiles_read_employer on profiles
+  for select using (id = app_shop_id());

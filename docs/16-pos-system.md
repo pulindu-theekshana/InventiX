@@ -3,7 +3,7 @@
 What it is, how it fits the system that already exists, and why each decision was made that way.
 Written as it is built, one phase at a time.
 
-Last updated 1 October 2026 — phases 1 to 5 complete: the backend, the outbox, the sell screen, returns, day close, and who may use the till.
+Last updated 2 October 2026 — phases 1 to 6 complete: the backend, the outbox, the sell screen, returns, day close, who may use the till, and cashier accounts.
 
 ---
 
@@ -28,8 +28,10 @@ The POS is **another client of the same backend**, not a separate system. There 
 sale is an endpoint on the API the app already uses. The owner's Stocks screen updates by itself
 because `stock_items` is in the realtime publication (migration 0019).
 
-**Where the code lives:** `frontend/app/(pos)/`, a route group beside `(customer)` and
-`(supplier)`, so it shares login, the API client, the theme and the catalog. It becomes its own app
+**Where the code lives:** `frontend/app/pos/`, beside `(customer)` and `(supplier)`, so it shares
+login, the API client, the theme and the catalog. A plain folder, not a `(group)`: a bracketed
+folder adds no path segment, so `app/(pos)/index.tsx` claimed `/` and opened the till instead of
+the login screen. It becomes its own app
 only if it turns out to be a product of its own; moving a folder later is a day's work, while
 un-copying code that has drifted apart is much worse.
 
@@ -242,12 +244,13 @@ see at a glance what happened.
 |---|---|
 | The shop's cashiers, owner PIN and limits | `pos_settings` (migration 0028), `GET/PUT /customer/pos/settings` |
 | PIN hashing | `src/pos/pin.ts` |
-| Who is at the till now | `src/pos/shift.ts`, `app/pos/shift.tsx` |
+| Who is at the till now | `src/pos/shift.ts`, `app/pos/shift.tsx` *(both removed in phase 6)* |
 | Owner approval prompt | `src/components/OwnerPin.tsx` |
 | Owner's settings screen | `app/pos/settings.tsx` |
 
 **What needs the owner's PIN:** a discount above the limit (Rs. 100 by default), a refund above the
-limit (Rs. 500), leaving the till for the rest of the app, and opening till settings.
+limit (Rs. 500), leaving the till for the rest of the app, and opening till settings. *Phase 6
+keeps only the first two, and asks only while a cashier is at the counter.*
 
 ### Decisions worth defending
 
@@ -261,7 +264,8 @@ during a rush. That list cost far less to build than the approval flow.
 
 **A shift, not an account.** The cashier picks their name and types a PIN; every bill then carries
 that name, and the day's takings split per person. It answers "who is standing here", not "what may
-you do".
+you do". *Replaced in phase 6: the account answers both, and the shift screen and the cashier PINs
+are gone.*
 
 **PINs are hashed on the device**, salted with the shop id, so the server never sees the number and
 the same PIN in two shops produces different hashes.
@@ -273,18 +277,16 @@ connection.
 **A shop with no cashiers is not forced to invent one.** The till offers "sell as the owner",
 because a one-person shop should not have to configure a lock against nobody.
 
-### Paths through the till
+### Paths through the till (as they stand after phase 6)
 
 ```
-/pos          the counter — needs a signed-in shop account and a started shift
-/pos/shift    who is at the till; always links to settings
-/pos/settings the owner's screen — behind the owner PIN whenever one is set
+/pos          the counter — needs a signed-in shop or cashier account
+/pos/settings staff logins, limits, owner PIN — the owner's account only
 /pos/returns  goods coming back (also reached by tapping a bill on day close)
-/pos/close    day close, and ending the shift
+/pos/close    day close, and signing out at the end of a shift
 ```
 
-Back from settings goes to the counter when someone is on shift, and to the shift screen when
-nobody is. The till refuses a signed-out browser and sends a supplier to their own home screen —
+`/pos/shift` is gone: who is at the till is who signed in. The till refuses a signed-out browser and sends a supplier to their own home screen —
 it used to render its screens to anyone, which looked like a shop with no cashiers and no stock.
 
 ### What this is, honestly
@@ -294,21 +296,121 @@ that browser can still reach everything through the API. Four digits is ten thou
 anyone holding the hash can find the PIN. It stops an honest employee wandering into supplier
 prices; it does not stop a determined one.
 
-The boundary that holds is a **separate cashier account** with its own permissions, which is the
-next phase. The work here is not wasted: every real till has both, because an account answers
-"what may you do" and a PIN answers "who is standing here right now".
+The boundary that holds is a **separate cashier account** with its own permissions, which is phase
+6 below. What survived from this phase is the part a PIN is genuinely good at: approving one
+unusual amount at the counter.
+
+---
+
+## Phase 6 - what was built
+
+A cashier is now an account, not a name on a list.
+
+### How it works
+
+The owner opens till settings, types a name and a password, and gets back a login address made for
+that person: `nimal.3f8a1c@till.inventix.app`. No mail is ever sent to it -- it is a username
+shaped like an address, because Supabase signs people in by email and a shop assistant may not
+have one. The cashier types it at the normal sign-in screen and lands on the till.
+
+```
+profiles
+  id            the cashier's own auth user
+  role          'cashier'
+  employer_id   the shop they work for
+```
+
+That is the whole mechanism. Everything else asks one question in one place:
+
+| Layer | Question | Answer |
+|---|---|---|
+| Database | which shop's rows may this user read? | `app_shop_id()` - `coalesce(employer_id, id)` |
+| Backend | which shop is this request about? | `CurrentUser.shop_id`, the same coalesce |
+| Backend | may this caller be here at all? | `require_till` (owner or cashier) vs `require_customer` |
+
+### Database - `0029_cashier_accounts.sql`
+
+- `profiles.role` accepts `'cashier'`, and a new `employer_id` says which shop. A check constraint
+  makes the two agree in both directions: a cashier with no employer would see nothing, an owner
+  with one would be reading someone else's shop.
+- `app_shop_id()`, and a read policy for the till beside each owner policy on `stock_items`,
+  `pos_sales`, `pos_sale_items` and `pos_settings`. Added beside rather than replacing: policies
+  are OR'd, so the owner's path is untouched and a mistake here cannot lock a shop out of its own
+  data.
+- `pos_sales.cashier_id` - who was signed in, stamped by the backend from the token.
+  `cashier_label` stays as the name to print, and for bills taken before this migration.
+- `apply_stock_adjustment` compares the stock row's owner against `app_shop_id()` instead of
+  `auth.uid()`; otherwise a cashier's sale could not move the shop's stock.
+
+### Endpoints
+
+```
+GET    /customer/pos/cashiers        the shop's staff logins      owner only
+POST   /customer/pos/cashiers        name + password -> a login   owner only
+DELETE /customer/pos/cashiers/{id}   switch the login off         owner only
+```
+
+The till's own endpoints, and `GET /customer/stocks` which it searches to build a bill, moved from
+`require_customer` to `require_till`.
+
+### Decisions worth defending
+
+**The name on a bill comes from the token.** The till used to send `cashier_label` and the backend
+stored it. Anything the client can choose, the client can lie about, and the one field an owner
+would rely on in a dispute is exactly the wrong one to take on trust. The backend now ignores what
+was sent and writes the signed-in account's name and id. The field is still accepted, so a bill
+queued by an older till still sends.
+
+**A cashier is refused everywhere except the till.** Every other customer route keeps
+`require_customer`, so ordering, stock edits, reports, supplier ratings and the till's own settings
+answer a cashier 403. The default is "no", and opening a route is a visible one-line change.
+
+**Reads are a policy, not only a filter.** The services already scope every query by owner, but the
+till reads with the cashier's own token, so the database enforces it as well. A forgotten
+`.eq("owner_id")` is then a bug that returns nothing rather than one that returns another shop.
+
+**Removing a cashier switches the account off.** `is_active = false`, which `get_current_user`
+already refuses. Deleting it would cascade and take the name off every bill that person rang.
+
+**The owner PIN stayed, for the one thing it is good at.** It no longer guards leaving the till or
+opening settings: those were standing in for an account boundary that now exists. A cashier has no
+link to settings and no permission for them, and leaving is a sign-out. What is left is approving a
+discount or refund above the shop's limit, and it is asked only when a cashier is at the counter -
+an owner approving their own discount proves nothing.
+
+**What was deleted.** `/pos/shift`, `src/pos/shift.ts` and the per-cashier PIN list. Picking a name
+from a list was the weakest possible version of identity, and keeping it beside real accounts would
+mean two answers to "who is selling" that can disagree. `pos_settings.cashiers` is left in the
+database untouched rather than dropped: nothing reads it, and a destructive migration buys nothing.
+
+### What this is, honestly
+
+- A cashier's token can read the shop's **stock list**, because the till has to search it, and
+  through it the catalog and the `supplier_listings` prices, which are readable by anyone signed
+  in by design (spec 15.1) and are where a row's price comes from when the shop has not set its
+  own. A cashier cannot read the shop's orders, reports, ratings or till settings.
+- The owner's PIN hash is readable by a signed-in cashier, because approval has to work with no
+  connection. Four digits is ten thousand guesses. Verifying on the server would fix that and
+  would fail exactly when the till is offline.
+- Limits are still enforced on the device. A cashier calling the API directly could post a bill
+  with any discount - it would carry their name and appear on day close. Server-side enforcement
+  needs an approval the server can verify, which is its own piece of work.
+- A forgotten cashier password means removing the login and making another. A reset endpoint is a
+  few lines and can wait until a shop asks for it.
 
 ---
 
 ## Still to build
 
-- **Phase 6:** a real cashier account, so the data boundary is real and not only the screens
-- **Phase 6:** install on the laptop as a PWA, working offline
-- **Phase 7:** receipt printing and scanner behaviour
+- **Owner's till view:** takings, and every discount and return per cashier, over a date range, in
+  the owner's own app. Worth building now: `cashier_id` makes the name on a bill trustworthy.
+- **Phase 7:** install on the laptop as a PWA, receipt printing and scanner behaviour
 - **Phase 8, only if needed:** a packaged `.exe`
 
 ## Known limits
 
+- A cashier signs in with a made-up address on a domain nobody owns. Harmless while no mail is sent
+  to it, and it means Supabase's own password reset cannot be used for staff.
 - While a till is offline the owner's phone shows stale stock. It catches up on reconnect.
 - A return of a weighed item moves whole units in stock and in the sales history, because both
   count in units. The bill keeps the exact weight.

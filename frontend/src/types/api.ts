@@ -7,7 +7,7 @@
  */
 
 import type { OrderStatus } from './orderStatus';
-import type { CatalogProduct, Role } from './database';
+import type { AccountRole, CatalogProduct, Role } from './database';
 
 /** Spec 6.2 — three states, matching the three pie segments exactly. */
 export type StockStatus = 'in_stock' | 'low_stock' | 'restock_requested';
@@ -163,11 +163,22 @@ export interface RestockDraft {
 
 export interface AuthProfile {
   id: string;
-  role: Role;
+  role: AccountRole;
   business_name: string;
   contact_person: string;
   email: string;
   phone: string;
+  /** The shop a cashier works for. Null for an owner, who is their own shop. */
+  employer_id: string | null;
+}
+
+/** One of the shop's staff logins. The PIN-only cashier of phase 5 is gone. */
+export interface CashierAccount {
+  id: string;
+  name: string;
+  /** Made by the backend, because a shop assistant may have no email address. */
+  login_email: string;
+  is_active: boolean;
 }
 
 /** Spec 7.1 — the five reports that need no machine learning. */

@@ -70,7 +70,7 @@ async function loadProfile(userId: string, email: string): Promise<void> {
   if (!supabase) return;
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, role, business_name, contact_person, email, phone')
+    .select('id, role, business_name, contact_person, email, phone, employer_id')
     .eq('id', userId)
     .single();
 
@@ -183,6 +183,7 @@ export function signInDemo(role: Role): void {
       contact_person: 'Mahinda',
       email: 'demo@inventix.lk',
       phone: '077 123 4567',
+      employer_id: null,
     },
   });
 }

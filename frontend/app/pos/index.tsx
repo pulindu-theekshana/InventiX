@@ -34,7 +34,7 @@ import * as cart from '../../src/pos/cart';
 import * as device from '../../src/pos/device';
 import * as queue from '../../src/pos/queue';
 import * as settings from '../../src/pos/settings';
-import * as shift from '../../src/pos/shift';
+import { signOut } from '../../src/stores/authStore';
 import { newId } from '../../src/pos/ids';
 import type { CartLine } from '../../src/pos/cart';
 import type { StockItemView } from '../../src/types/api';
@@ -44,10 +44,15 @@ type Payment = 'cash' | 'card' | 'other';
 export default function Sell() {
   const stocks = useStocks();
   const outbox = usePosQueue();
-  const { profile } = useAuth();
-  const [cashier, setCashier] = useState<string | null>(null);
+  /**
+   * Who is at the till is who signed in. Phase 5 asked on a screen and kept the answer on the
+   * device, which meant the name on a bill was only as good as the honesty of whoever tapped
+   * it. The backend now stamps the bill from the token and ignores what the till sends.
+   */
+  const { profile, isCashier, shopId } = useAuth();
+  const cashier = profile?.contact_person ?? null;
   /** What the owner is being asked to approve, or null when nothing is waiting. */
-  const [approving, setApproving] = useState<'discount' | 'leave' | 'settings' | null>(null);
+  const [approving, setApproving] = useState<'discount' | null>(null);
 
   const [query, setQuery] = useState('');
   const [lines, setLines] = useState<CartLine[]>([]);
@@ -66,17 +71,9 @@ export default function Sell() {
       settings.load();
       // Once per visit, and only when online: see device.catchUpWithServer.
       void device.catchUpWithServer();
-      // No shift started means nobody has said who is at the counter, so bills would carry no
-      // name. Sent there rather than silently recording sales as "unknown".
-      shift.load().then((who) => {
-        setCashier(who);
-        if (!who) router.replace('/pos/shift');
-      });
       searchBox.current?.focus();
     }, []),
   );
-
-  useEffect(() => shift.subscribe(() => setCashier(shift.current())), []);
 
   const items = stocks.data ?? [];
 
@@ -125,28 +122,24 @@ export default function Sell() {
    * them. Below it the cashier is not interrupted, which is what makes the limit usable at all.
    */
   function finishPressed() {
-    if (settings.needsOwner(discountValue, settings.current().discount_limit)) {
+    if (settings.needsOwner(discountValue, settings.current().discount_limit, isCashier)) {
       setApproving('discount');
       return;
     }
     void finish();
   }
 
-  /** The owner's screen, so it is behind the owner's PIN whenever one is set. */
-  function settingsPressed() {
-    if (settings.locked()) {
-      setApproving('settings');
-      return;
-    }
-    router.push('/pos/settings');
-  }
-
+  /**
+   * Leaving means two different things now. A cashier signs out, because the rest of the app is
+   * not theirs and there is nothing for them on the other side of this button. The owner goes
+   * back to their own app, and is not asked to approve themselves.
+   */
   async function leavePressed() {
-    if (settings.locked()) {
-      setApproving('leave');
+    if (isCashier) {
+      await signOut();
+      router.replace('/(auth)/login');
       return;
     }
-    await shift.end();
     router.replace('/stocks');
   }
 
@@ -198,13 +191,19 @@ export default function Sell() {
           returnKeyType="done"
           containerStyle={styles.flex}
         />
-        <Pressable onPress={settingsPressed} style={styles.link}>
-          <Ionicons name="settings-outline" size={20} color={colors.accent} />
-          <Text style={[text.caption, { color: colors.accent }]}>Settings</Text>
-        </Pressable>
+        {/* The owner's settings are reachable from the owner's account only. A cashier has no
+            link, and the backend refuses the request even if one is typed into the address. */}
+        {isCashier ? null : (
+          <Pressable onPress={() => router.push('/pos/settings')} style={styles.link}>
+            <Ionicons name="settings-outline" size={20} color={colors.accent} />
+            <Text style={[text.caption, { color: colors.accent }]}>Settings</Text>
+          </Pressable>
+        )}
         <Pressable onPress={leavePressed} style={styles.link}>
           <Ionicons name="exit-outline" size={20} color={colors.accent} />
-          <Text style={[text.caption, { color: colors.accent }]}>Leave</Text>
+          <Text style={[text.caption, { color: colors.accent }]}>
+            {isCashier ? 'Sign out' : 'Leave'}
+          </Text>
         </Pressable>
         <Pressable onPress={() => router.push('/pos/returns')} style={styles.link}>
           <Ionicons name="arrow-undo-outline" size={20} color={colors.accent} />
@@ -415,24 +414,17 @@ export default function Sell() {
           />
         </View>
       </View>
+      {/* The one thing still worth a PIN: a discount above the shop's limit, while a cashier
+          is at the counter. shopId, not profile.id -- a cashier's own id would salt a hash the
+          owner's PIN could never match. */}
       <OwnerPin
         visible={approving !== null}
-        shopId={profile?.id ?? ''}
-        reason={
-          approving === 'discount'
-            ? `A discount of ${currency(discountValue)} is above the limit.`
-            : approving === 'settings'
-              ? 'Till settings change who may sell and what needs your approval.'
-              : 'Leaving the till opens the rest of the app.'
-        }
+        shopId={shopId ?? ''}
+        reason={`A discount of ${currency(discountValue)} is above the limit.`}
         onCancel={() => setApproving(null)}
-        onApproved={async () => {
-          const what = approving;
+        onApproved={() => {
           setApproving(null);
-          if (what === 'discount') return finish();
-          if (what === 'settings') return router.push('/pos/settings');
-          await shift.end();
-          router.replace('/stocks');
+          void finish();
         }}
       />
     </KeyboardAvoidingView>

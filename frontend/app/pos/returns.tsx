@@ -23,13 +23,12 @@ import { OwnerPin } from '../../src/components/OwnerPin';
 import { findSale, recordReturn } from '../../src/api/pos';
 import * as device from '../../src/pos/device';
 import * as settings from '../../src/pos/settings';
-import * as shift from '../../src/pos/shift';
 import { newId } from '../../src/pos/ids';
 import type { Sale } from '../../src/types/api';
 
 export default function Returns() {
   const submit = useSubmit();
-  const { profile } = useAuth();
+  const { profile, isCashier, shopId } = useAuth();
   const [approving, setApproving] = useState(false);
   /** Set when the cashier tapped a bill on Day close, so nothing has to be typed. */
   const { receipt: fromLink } = useLocalSearchParams<{ receipt?: string }>();
@@ -78,7 +77,7 @@ export default function Returns() {
    */
   function giveBackPressed() {
     if (!bill || !anything) return;
-    if (settings.needsOwner(refund, settings.current().return_limit)) {
+    if (settings.needsOwner(refund, settings.current().return_limit, isCashier)) {
       setApproving(true);
       return;
     }
@@ -94,7 +93,9 @@ export default function Returns() {
         device_id: await device.getDeviceId(),
         returns_receipt_no: bill.receipt_no,
         sold_at: new Date().toISOString(),
-        cashier_label: shift.current(),
+        // The backend overwrites this with the signed-in account's name; sent so a bill made
+        // by an older till still names someone.
+        cashier_label: profile?.contact_person ?? null,
         reason: null,
         lines: Object.entries(coming)
           .filter(([, q]) => q > 0)
@@ -207,7 +208,7 @@ export default function Returns() {
       ) : null}
       <OwnerPin
         visible={approving}
-        shopId={profile?.id ?? ''}
+        shopId={shopId ?? ''}
         reason={`Giving back ${currency(refund)} is above the limit.`}
         onCancel={() => setApproving(false)}
         onApproved={() => {

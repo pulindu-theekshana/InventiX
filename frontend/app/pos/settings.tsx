@@ -1,9 +1,9 @@
 /**
  * Till settings
  *
- * Purpose : The owner's side of the till: their PIN, the amounts they want to be asked about, and who works the counter.
+ * Purpose : The owner's side of the till: their PIN, the amounts they want to be asked about, and the staff logins for the people who work the counter.
  * Spec    : Section 6.6
- * Look here when : A limit does not take effect, a cashier cannot be added or removed, or the screen asks for a PIN at the wrong moment.
+ * Look here when : A limit does not take effect, or a cashier cannot be added, removed or signed in.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -13,27 +13,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 import { ErrorBanner } from '../../src/components/ErrorBanner';
-import { OwnerPin } from '../../src/components/OwnerPin';
 import { colors } from '../../src/theme/colors';
 import { radius, spacing } from '../../src/theme/spacing';
 import { text } from '../../src/theme/typography';
 import { currency } from '../../src/lib/format';
 import { useAuth } from '../../src/hooks/useAuth';
 import { useSubmit } from '../../src/hooks/useSubmit';
+import { createCashier, listCashiers, removeCashier } from '../../src/api/pos';
 import { hashPin, isValidPin } from '../../src/pos/pin';
 import * as settings from '../../src/pos/settings';
-import * as shift from '../../src/pos/shift';
-import type { Cashier, PosSettings } from '../../src/types/api';
+import type { CashierAccount, PosSettings } from '../../src/types/api';
 
 export default function TillSettings() {
-  const { profile } = useAuth();
+  const { profile, shopId } = useAuth();
   const submit = useSubmit();
 
   const [current, setCurrent] = useState<PosSettings>(settings.DEFAULTS);
   const [ready, setReady] = useState(false);
-  /** Null until the real settings arrive: deciding before that asked for a PIN that was not set. */
-  const [unlocked, setUnlocked] = useState<boolean | null>(null);
-  const [asking, setAsking] = useState(false);
 
   /** Each section shows what is saved until the owner chooses to change it. */
   const [editingPin, setEditingPin] = useState(false);
@@ -42,8 +38,13 @@ export default function TillSettings() {
   const [ownerPin, setOwnerPin] = useState('');
   const [discount, setDiscount] = useState('');
   const [refund, setRefund] = useState('');
+
+  const [staff, setStaff] = useState<CashierAccount[]>([]);
   const [newName, setNewName] = useState('');
-  const [newPin, setNewPin] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  /** The login just made. It stays on screen until dismissed: nothing stores it for the owner. */
+  const [madeOne, setMadeOne] = useState<CashierAccount | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
@@ -52,15 +53,26 @@ export default function TillSettings() {
     setDiscount(String(next.discount_limit));
     setRefund(String(next.return_limit));
     setReady(true);
-    // With no PIN there is nothing to unlock, which is also the shop's way of turning the
-    // guards off entirely.
-    setUnlocked((was) => was ?? !next.owner_pin_hash);
   }, []);
 
+  const loadStaff = useCallback(async () => {
+    try {
+      setStaff(await listCashiers());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not read your cashiers.');
+    }
+  }, []);
+
+  /**
+   * No PIN gate on this screen any more. It is the owner's own account that opens it: a cashier
+   * has their own login, no link to here, and a backend that answers them 403. The PIN that
+   * used to stand in for that is now only for approving a discount above the shop's limit.
+   */
   useFocusEffect(
     useCallback(() => {
       settings.load().then(adopt);
-    }, [adopt]),
+      void loadStaff();
+    }, [adopt, loadStaff]),
   );
 
   useEffect(() => settings.subscribe(() => adopt(settings.current())), [adopt]);
@@ -75,13 +87,13 @@ export default function TillSettings() {
   }
 
   async function saveOwnerPin() {
-    if (!profile) return;
+    if (!shopId) return;
     if (!isValidPin(ownerPin)) {
       setError('A PIN is four to six digits.');
       return;
     }
     await persist(
-      { ...current, owner_pin_hash: await hashPin(ownerPin, profile.id) },
+      { ...current, owner_pin_hash: await hashPin(ownerPin, shopId) },
       'Owner PIN saved.',
     );
     setOwnerPin('');
@@ -89,7 +101,10 @@ export default function TillSettings() {
   }
 
   async function removeOwnerPin() {
-    await persist({ ...current, owner_pin_hash: null }, 'Owner PIN removed. Nothing locks now.');
+    await persist(
+      { ...current, owner_pin_hash: null },
+      'Owner PIN removed. Large discounts now go through without asking.',
+    );
     setOwnerPin('');
     setEditingPin(false);
   }
@@ -103,58 +118,37 @@ export default function TillSettings() {
   }
 
   async function addCashier() {
-    if (!profile || !newName.trim()) return;
-    if (!isValidPin(newPin)) {
-      setError('A PIN is four to six digits.');
+    setError(null);
+    setSaved(null);
+    setMadeOne(null);
+    const name = newName.trim();
+    if (name.length < 2) {
+      setError('Type the name of the person who will use this login.');
       return;
     }
-    if (current.cashiers.some((c) => c.name.toLowerCase() === newName.trim().toLowerCase())) {
-      setError('Someone with that name is already on the list.');
+    if (newPassword.length < 6) {
+      setError('A password needs at least six characters.');
       return;
     }
-    const cashier: Cashier = { name: newName.trim(), pin_hash: await hashPin(newPin, profile.id) };
-    await persist({ ...current, cashiers: [...current.cashiers, cashier] }, `${cashier.name} added.`);
-    setNewName('');
-    setNewPin('');
+    await submit.run(async () => {
+      const made = await createCashier(name, newPassword);
+      setMadeOne(made);
+      setNewName('');
+      setNewPassword('');
+      await loadStaff();
+    });
   }
 
-  async function removeCashier(name: string) {
-    await persist(
-      { ...current, cashiers: current.cashiers.filter((c) => c.name !== name) },
-      `${name} removed.`,
-    );
+  async function dropCashier(cashier: CashierAccount) {
+    setError(null);
+    const ok = await submit.run(async () => {
+      await removeCashier(cashier.id);
+      await loadStaff();
+    });
+    if (ok) setSaved(`${cashier.name} can no longer sign in.`);
   }
 
-  /** Back goes to the counter if someone is on shift, and to the shift screen if nobody is. */
-  function back() {
-    router.replace(shift.current() ? '/pos' : '/pos/shift');
-  }
-
-  if (!ready || unlocked === null) {
-    return <View style={styles.center} />;
-  }
-
-  if (!unlocked) {
-    return (
-      <View style={styles.center}>
-        <Ionicons name="lock-closed-outline" size={34} color={colors.textSubtle} />
-        <Text style={[text.label, styles.muted]}>These settings are the owner&apos;s.</Text>
-        <Button label="Enter owner PIN" variant="accent" onPress={() => setAsking(true)} />
-        <Button label="Back" variant="outline" onPress={back} />
-
-        <OwnerPin
-          visible={asking}
-          shopId={profile?.id ?? ''}
-          reason="Till settings change who may sell and what needs your approval."
-          onCancel={() => setAsking(false)}
-          onApproved={() => {
-            setAsking(false);
-            setUnlocked(true);
-          }}
-        />
-      </View>
-    );
-  }
+  if (!ready) return <View style={styles.center} />;
 
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
@@ -162,82 +156,85 @@ export default function TillSettings() {
       <ErrorBanner message={submit.error} />
       {saved ? <Text style={[text.label, { color: colors.success }]}>{saved}</Text> : null}
 
-      {/* ---------------------------------------------------------------- owner PIN */}
+      {/* ---------------------------------------------------------------- cashiers */}
       <View style={styles.card}>
-        <Text style={text.title}>Owner PIN — yours</Text>
+        <Text style={text.title}>Cashiers — your staff</Text>
         <Text style={[text.caption, styles.muted]}>
-          Asked for a discount or refund above your limits, for leaving the till, and for this
-          screen. Your staff do not know it.
+          Each person gets their own login. They see the till and nothing else: not your orders,
+          not your reports, not these settings. Every bill carries their name because they
+          signed in, not because a name was tapped on a list.
         </Text>
 
-        {current.owner_pin_hash && !editingPin ? (
-          <>
-            <View style={styles.statusRow}>
-              <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-              <Text style={[text.body, styles.flex]}>A PIN is set</Text>
-            </View>
-            <View style={styles.row}>
-              <Button
-                label="Remove PIN"
-                variant="outline"
-                onPress={removeOwnerPin}
-                style={styles.flex}
-              />
-              <Button
-                label="Change PIN"
-                variant="accent"
-                onPress={() => setEditingPin(true)}
-                style={styles.flex}
-              />
-            </View>
-          </>
+        {madeOne ? (
+          <View style={styles.made}>
+            <Text style={text.bodyStrong}>{madeOne.name} can sign in now</Text>
+            <Text style={[text.caption, styles.muted]}>
+              Write this down and give it to them with the password you just typed. This screen
+              cannot show the password again.
+            </Text>
+            <Text style={[text.bodyStrong, styles.login]} selectable>
+              {madeOne.login_email}
+            </Text>
+            <Button label="Done" variant="outline" onPress={() => setMadeOne(null)} />
+          </View>
+        ) : null}
+
+        {staff.length === 0 ? (
+          <Text style={[text.caption, styles.muted]}>
+            Nobody added yet, so you are the one selling.
+          </Text>
         ) : (
-          <>
-            {!current.owner_pin_hash ? (
-              <Text style={[text.caption, { color: colors.warning }]}>
-                Not set, so nothing locks. Set one to turn the guards on.
-              </Text>
-            ) : null}
-            <Input
-              value={ownerPin}
-              onChangeText={setOwnerPin}
-              placeholder="4 to 6 digits"
-              keyboardType="number-pad"
-              secureTextEntry
-              maxLength={6}
-            />
-            <View style={styles.row}>
-              {editingPin ? (
-                <Button
-                  label="Cancel"
-                  variant="outline"
-                  onPress={() => {
-                    setEditingPin(false);
-                    setOwnerPin('');
-                  }}
-                  style={styles.flex}
-                />
-              ) : null}
-              <Button
-                label={current.owner_pin_hash ? 'Save new PIN' : 'Set PIN'}
-                variant="accent"
-                onPress={saveOwnerPin}
-                loading={submit.busy}
-                disabled={!ownerPin}
-                style={styles.flex}
-              />
+          staff.map((c) => (
+            <View key={c.id} style={styles.statusRow}>
+              <Ionicons name="person-circle-outline" size={22} color={colors.textMuted} />
+              <View style={styles.flex}>
+                <Text style={text.body}>{c.name}</Text>
+                <Text style={[text.caption, styles.muted]} selectable>
+                  {c.login_email}
+                </Text>
+              </View>
+              <Pressable onPress={() => dropCashier(c)} hitSlop={8} style={styles.remove}>
+                <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                <Text style={[text.caption, { color: colors.danger }]}>Remove</Text>
+              </Pressable>
             </View>
-          </>
+          ))
         )}
+
+        <Text style={[text.label, styles.addHeading]}>Add a cashier</Text>
+        <View style={styles.row}>
+          <Input
+            value={newName}
+            onChangeText={setNewName}
+            placeholder="Name"
+            containerStyle={styles.flex}
+          />
+          <Input
+            value={newPassword}
+            onChangeText={setNewPassword}
+            placeholder="Password for them"
+            secureTextEntry
+            containerStyle={styles.flex}
+          />
+        </View>
+        <Button
+          label="Create login"
+          variant="outline"
+          icon="add"
+          onPress={addCashier}
+          loading={submit.busy}
+          disabled={!newName.trim() || newPassword.length < 6}
+          fullWidth
+        />
       </View>
 
       {/* ---------------------------------------------------------------- limits */}
       <View style={styles.card}>
         <Text style={text.title}>Ask me when it is bigger than</Text>
         <Text style={[text.caption, styles.muted]}>
-          These apply to the whole shop, not to one person. Below them any cashier works without
+          These apply to the whole shop, not to one person. Below them a cashier works without
           interruption; above them the till asks for your PIN. Set either to 0 to be asked every
-          time.
+          time. Selling under your own login, you are never asked.
         </Text>
 
         {editingLimits ? (
@@ -294,65 +291,85 @@ export default function TillSettings() {
         )}
       </View>
 
-      {/* ---------------------------------------------------------------- cashiers */}
+      {/* ---------------------------------------------------------------- owner PIN */}
       <View style={styles.card}>
-        <Text style={text.title}>Cashiers — your staff</Text>
+        <Text style={text.title}>Owner PIN — yours</Text>
         <Text style={[text.caption, styles.muted]}>
-          Each person gets their own PIN and starts their own shift, so every bill shows who rang
-          it. Add someone when they join, remove them when they leave — you can do this any time.
+          Typed by you at the counter when a cashier needs a discount or a refund above your
+          limits. Without one, those go through unasked.
         </Text>
 
-        {current.cashiers.length === 0 ? (
-          <Text style={[text.caption, styles.muted]}>Nobody added yet.</Text>
-        ) : (
-          current.cashiers.map((c) => (
-            <View key={c.name} style={styles.statusRow}>
-              <Ionicons name="person-circle-outline" size={22} color={colors.textMuted} />
-              <Text style={[text.body, styles.flex]}>{c.name}</Text>
-              <Pressable onPress={() => removeCashier(c.name)} hitSlop={8} style={styles.remove}>
-                <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                <Text style={[text.caption, { color: colors.danger }]}>Remove</Text>
-              </Pressable>
+        {current.owner_pin_hash && !editingPin ? (
+          <>
+            <View style={styles.statusRow}>
+              <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+              <Text style={[text.body, styles.flex]}>A PIN is set</Text>
             </View>
-          ))
+            <View style={styles.row}>
+              <Button
+                label="Remove PIN"
+                variant="outline"
+                onPress={removeOwnerPin}
+                style={styles.flex}
+              />
+              <Button
+                label="Change PIN"
+                variant="accent"
+                onPress={() => setEditingPin(true)}
+                style={styles.flex}
+              />
+            </View>
+          </>
+        ) : (
+          <>
+            {!current.owner_pin_hash ? (
+              <Text style={[text.caption, { color: colors.warning }]}>
+                Not set, so a cashier is never stopped by a limit.
+              </Text>
+            ) : null}
+            <Input
+              value={ownerPin}
+              onChangeText={setOwnerPin}
+              placeholder="4 to 6 digits"
+              keyboardType="number-pad"
+              secureTextEntry
+              maxLength={6}
+            />
+            <View style={styles.row}>
+              {editingPin ? (
+                <Button
+                  label="Cancel"
+                  variant="outline"
+                  onPress={() => {
+                    setEditingPin(false);
+                    setOwnerPin('');
+                  }}
+                  style={styles.flex}
+                />
+              ) : null}
+              <Button
+                label={current.owner_pin_hash ? 'Save new PIN' : 'Set PIN'}
+                variant="accent"
+                onPress={saveOwnerPin}
+                loading={submit.busy}
+                disabled={!ownerPin}
+                style={styles.flex}
+              />
+            </View>
+          </>
         )}
-
-        <Text style={[text.label, styles.addHeading]}>Add a cashier</Text>
-        <View style={styles.row}>
-          <Input
-            value={newName}
-            onChangeText={setNewName}
-            placeholder="Name"
-            containerStyle={styles.flex}
-          />
-          <Input
-            value={newPin}
-            onChangeText={setNewPin}
-            placeholder="Their PIN"
-            keyboardType="number-pad"
-            secureTextEntry
-            maxLength={6}
-            containerStyle={styles.flex}
-          />
-        </View>
-        <Button
-          label="Add"
-          variant="outline"
-          icon="add"
-          onPress={addCashier}
-          loading={submit.busy}
-          disabled={!newName.trim() || !newPin}
-          fullWidth
-        />
       </View>
 
       <Button
-        label={shift.current() ? 'Back to the till' : 'Back to shifts'}
+        label="Back to the till"
         variant="outline"
         icon="arrow-back"
-        onPress={back}
+        onPress={() => router.replace('/pos')}
         fullWidth
       />
+      <Text style={[text.caption, styles.muted]}>
+        Signed in as {profile?.contact_person ?? 'the owner'}.
+      </Text>
     </ScrollView>
   );
 }
@@ -367,4 +384,11 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   remove: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   addHeading: { marginTop: spacing.sm },
+  made: {
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.successBg,
+  },
+  login: { color: colors.brandInk },
 });

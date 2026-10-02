@@ -85,15 +85,11 @@ export function current(): PosSettings {
 /**
  * Whether the owner has to be asked about an amount.
  *
- * No owner PIN set means no lock at all, so there is nothing to approve with -- asking then would
- * put up a prompt that can never be satisfied, which is worse than not asking. A shop turns the
- * guards on by setting a PIN, not by having a limit.
+ * Three things have to be true. There is a PIN to approve with -- without one the prompt could
+ * never be satisfied, which is worse than not asking. The amount is over the limit. And the
+ * person at the till is a cashier: an owner signed into their own account approving their own
+ * discount is a tap that proves nothing.
  */
-export function needsOwner(amount: number, limit: number): boolean {
-  return Boolean(current().owner_pin_hash) && amount > limit;
-}
-
-/** For the actions that are not about an amount: leaving the till, opening settings. */
-export function locked(): boolean {
-  return Boolean(current().owner_pin_hash);
+export function needsOwner(amount: number, limit: number, askingIsCashier: boolean): boolean {
+  return askingIsCashier && Boolean(current().owner_pin_hash) && amount > limit;
 }

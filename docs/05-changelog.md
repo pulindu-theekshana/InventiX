@@ -14,6 +14,34 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 
 ---
 
+## 2026-10-02 - Phase 6: cashier accounts
+**Added.** Staff logins. The owner types a name and a password in till settings and gets back a
+login address for that person; they sign in at the normal screen and land on the till. New role
+`'cashier'` on `profiles` with `employer_id`, created through `POST /customer/pos/cashiers`.
+
+**Added.** `app_shop_id()` in the database and `CurrentUser.shop_id` in the backend - the same
+`coalesce(employer_id, id)`, so a policy and a service cannot disagree about whose shop a row
+belongs to. Read policies for the till on `stock_items`, `pos_sales`, `pos_sale_items` and
+`pos_settings`, added beside the owner's rather than replacing them.
+
+**Changed.** The name and id on a bill are stamped from the token. `pos_sales.cashier_id` is new,
+and the `cashier_label` the till sends is ignored - a field the client chooses is a field the
+client can lie about, and this is the one an owner would rely on in a dispute.
+
+**Changed.** The till's endpoints and `GET /customer/stocks` moved to `require_till` (owner or
+cashier). Everything else a shop can do stays on `require_customer`, so a cashier gets 403.
+
+**Changed.** The owner PIN is now asked for one thing only: a discount or refund above the shop's
+limit, while a cashier is at the counter. It no longer guards leaving the till or opening settings,
+because an account does that properly.
+
+**Removed.** `/pos/shift`, `src/pos/shift.ts` and the per-cashier PIN list. `pos_settings.cashiers`
+stays in the database, unread.
+
+**Migration.** `0029_cashier_accounts.sql` - run it before using the till.
+
+**Decisions.** D-022.
+
 ## 2026-10-02 — Till: sales that could never be sent
 **Fixed.** A bill whose receipt number the shop had already used made the backend return 500, and
 the till kept it waiting for ever. It is now a 409 (`receipt_taken`); the till renumbers the bill

@@ -23,6 +23,8 @@ export default function PosLayout() {
   if (status === 'loading') return null;
   if (status !== 'signedIn') return <Redirect href="/(auth)/login" />;
   if (role === 'supplier') return <Redirect href="/(supplier)/listings" />;
+  // A cashier account belongs here and nowhere else, so there is nothing more to check: the
+  // owner may stand at the counter too.
 
   return (
     <Stack
@@ -37,7 +39,6 @@ export default function PosLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Till' }} />
-      <Stack.Screen name="shift" options={{ title: 'Start a shift' }} />
       <Stack.Screen name="settings" options={{ title: 'Till settings' }} />
       <Stack.Screen name="returns" options={{ title: 'Return goods' }} />
       <Stack.Screen name="close" options={{ title: 'Day close' }} />

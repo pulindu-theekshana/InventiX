@@ -95,8 +95,19 @@ catch it: the 119 backend tests run without a database.
 
 **`stock_adjustments` has a read policy and no insert policy, on purpose** — the audit trail is only
 trustworthy if rows come from `apply_stock_adjustment()` and nowhere else. That function therefore
-must be `security definer` and must check ownership itself against `auth.uid()`. Without it, every
-quantity change fails: manual adjustments, sales uploads and delivery receipts alike.
+must be `security definer` and must check ownership itself — against `app_shop_id()` since migration
+0029, not `auth.uid()`, or a cashier's sale cannot move the shop's stock. Without the check at all,
+every quantity change fails: manual adjustments, sales uploads and delivery receipts alike.
+
+**The shop is `app_shop_id()`, not `auth.uid()`.** A cashier account (migration 0029) is a different
+user id working on its employer's rows. In the backend the same answer is `CurrentUser.shop_id`, and
+in the app it is `useAuth().shopId` — never `profile.id`, which for a cashier is the person, not the
+shop. Salting the owner's PIN hash with `profile.id` produces a hash the owner's PIN can never
+match.
+
+**A new role means every `role !== 'supplier'` check now also means "cashier".** `require_customer`
+refuses a cashier, which is the safe default; routes the till needs must name `require_till`
+explicitly.
 
 **Realtime needs the table added to the publication.** Subscriptions otherwise connect, report no
 error, and never fire. See `migrations/0019_realtime.sql`.

@@ -253,9 +253,11 @@ Response `204`.
 
 Owned by `backend/app/feeds/customer/stocks/`. Specification §6.1–§6.4, §6.7.
 
-### `GET /customer/stocks` — **customer**
+### `GET /customer/stocks` — **customer or cashier**
 
-Every stock item the caller owns, joined to its catalog product.
+Every stock item the caller's shop owns, joined to its catalog product. The only route here a
+cashier account may reach (migration 0029): the till searches this list to build a bill. For a
+cashier, "the caller's shop" is their employer.
 
 Response `200`: array of `StockItemView`:
 

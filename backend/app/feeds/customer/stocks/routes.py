@@ -8,7 +8,7 @@ Look here when : A stocks endpoint 404s, returns the wrong status code, or rejec
 
 from fastapi import APIRouter, status
 
-from ....dependencies import CustomerDep
+from ....dependencies import CustomerDep, TillDep
 from . import service
 from .schemas import (
     AddStockItemIn,
@@ -23,9 +23,12 @@ from .schemas import (
 router = APIRouter(prefix="/customer/stocks", tags=["customer: stocks"])
 
 
+# TillDep, not CustomerDep: the till searches this list to build a bill, so a cashier account
+# has to be able to read it. user.shop_id is the owner either way. Every other route here edits
+# stock or reads its history, which stays the owner's.
 @router.get("", response_model=list[StockItemOut])
-def list_stocks(user: CustomerDep) -> list[StockItemOut]:
-    return service.list_stocks(user.db, user.id)
+def list_stocks(user: TillDep) -> list[StockItemOut]:
+    return service.list_stocks(user.db, user.shop_id)
 
 
 @router.get("/summary", response_model=StockSummaryOut)

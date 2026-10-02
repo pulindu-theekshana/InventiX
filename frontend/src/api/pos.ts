@@ -7,7 +7,14 @@
  */
 
 import { request } from './client';
-import type { DaySummary, PosSettings, ReturnPayload, Sale, SalePayload } from '../types/api';
+import type {
+  CashierAccount,
+  DaySummary,
+  PosSettings,
+  ReturnPayload,
+  Sale,
+  SalePayload,
+} from '../types/api';
 
 /**
  * Safe to call twice with the same payload: the backend keys on client_sale_id and returns the
@@ -43,6 +50,27 @@ export async function getSettings(): Promise<PosSettings> {
 
 export async function saveSettings(settings: PosSettings): Promise<PosSettings> {
   return request('/customer/pos/settings', { method: 'PUT', body: JSON.stringify(settings) });
+}
+
+/**
+ * The shop's staff logins. Owner only: the backend answers a cashier 403, which is the point of
+ * them being accounts rather than names in a list.
+ */
+export async function listCashiers(): Promise<CashierAccount[]> {
+  return request('/customer/pos/cashiers');
+}
+
+/** The login address comes back once, for the owner to pass on. It is not shown again. */
+export async function createCashier(name: string, password: string): Promise<CashierAccount> {
+  return request('/customer/pos/cashiers', {
+    method: 'POST',
+    body: JSON.stringify({ name, password }),
+  });
+}
+
+/** Switched off rather than deleted, so the bills they rang keep their name. */
+export async function removeCashier(id: string): Promise<void> {
+  await request(`/customer/pos/cashiers/${id}`, { method: 'DELETE' });
 }
 
 /** Where this shop's numbering has reached for a till, so a device with cleared storage fits in. */
