@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
+    <title>InventiX Till</title>
+
+    <!--
+      The HTML around the app on the web, which is where the till runs.
+
+      This file is the template for `output: single` in app.json. (A `+html.tsx` is only rendered
+      by static output, and static output pre-renders in Node, where `window is not defined`
+      crashed the build -- see docs/16-pos-system.md.) Expo copies everything in public/ to the
+      root of the export and injects the bundle's script tag into this file.
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#FFD94D" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="apple-touch-icon" href="/icons/till-192.png" />
+
+    <!-- The react-native-web reset Expo ships by default: without it the body scrolls as well
+         as the app. https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        overflow: hidden;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+
+    <script>
+      /*
+       * The offline shell, registered only for a built export -- never for the development
+       * server, where Metro serves a fresh bundle on every save and a worker caching it is a
+       * morning spent asking why a change will not show.
+       *
+       * An export loads /_expo/static/js/web/entry-<hash>.js; the dev server loads
+       * /index.bundle?platform=web. That difference is the test.
+       */
+      window.addEventListener('load', function () {
+        if (!('serviceWorker' in navigator)) return;
+        /* Expo injects the bundle's script tag at the end of the body, after this one, so the
+           check has to wait for the document to finish -- it found nothing when it ran inline. */
+        if (!document.querySelector('script[src*="/_expo/static/js/web/"]')) return;
+
+        navigator.serviceWorker
+          .register('/sw.js')
+          .then(function (registration) {
+            function watch(worker) {
+              if (!worker) return;
+              worker.addEventListener('statechange', function () {
+                /* Installed while something is already running means this is an update, not a
+                   first visit. The page is told; the person decides when to take it. */
+                if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                  window.__inventixUpdate = registration;
+                  window.dispatchEvent(new Event('inventix:update-ready'));
+                }
+              });
+            }
+            watch(registration.waiting);
+            registration.addEventListener('updatefound', function () {
+              watch(registration.installing);
+            });
+          })
+          .catch(function () {
+            /* Browsers allow a service worker on https or localhost only, so a till opened over
+               a plain LAN address has no offline shell. It still works online. */
+          });
+      });
+    </script>
+  </body>
+</html>
