@@ -29,14 +29,17 @@ const RANGES = [
 ];
 
 /**
- * The shop's day, not the browser's. A till in Colombo closing at 9pm is still "today" to a
- * phone set to UTC, and a range that quietly drops the evening is worse than no range at all.
+ * The phone's own date, written out by hand.
+ *
+ * `toISOString()` is UTC: in Colombo, between midnight and 5.30am it names yesterday, so "Today"
+ * at 1am would quietly show the day before and the evening's bills would be missing from it.
  */
 function days(back: number): { from: string; to: string } {
   const end = new Date();
   const start = new Date(end);
   start.setDate(start.getDate() - (back - 1));
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const iso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   return { from: iso(start), to: iso(end) };
 }
 
