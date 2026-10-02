@@ -231,7 +231,7 @@ export default function TillSettings() {
           <Input
             value={newPassword}
             onChangeText={setNewPassword}
-            placeholder="Password for them"
+            placeholder="Password, 6+ characters"
             secureTextEntry
             containerStyle={styles.flex}
           />
