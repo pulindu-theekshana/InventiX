@@ -99,7 +99,12 @@ export async function enqueue(sale: SalePayload): Promise<void> {
  * survivable -- the backend keys on client_sale_id -- but it would double the traffic of a till
  * that is already struggling with its connection.
  */
-export async function sync(): Promise<{ sent: number; left: number }> {
+/**
+ * `force` is the owner pressing "Try now": it retries the rejected ones too. A background run
+ * leaves them alone, because a bill the backend refuses will be refused again and the loop would
+ * hide the problem -- but when a person asks, the refusal may well have been fixed since.
+ */
+export async function sync({ force = false } = {}): Promise<{ sent: number; left: number }> {
   if (syncing && Date.now() - syncStartedAt < RUN_LOOKS_STUCK_MS) {
     return { sent: 0, left: (await load()).length };
   }
@@ -111,7 +116,7 @@ export async function sync(): Promise<{ sent: number; left: number }> {
     let sent = 0;
 
     for (const row of rows) {
-      if (row.status === 'stuck') {
+      if (row.status === 'stuck' && !force) {
         keep.push(row);
         continue;
       }

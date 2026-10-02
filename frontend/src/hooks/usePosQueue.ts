@@ -53,7 +53,7 @@ export function usePosQueue() {
     stuck,
     /** Why the last attempt failed. Shown so "not sent" is not a mystery. */
     error,
-    /** The owner pressing "try now", after fixing the WiFi. */
-    syncNow: () => queue.sync(),
+    /** The owner pressing "try now", after fixing the WiFi. Rejected bills are tried again too. */
+    syncNow: () => queue.sync({ force: true }),
   };
 }
