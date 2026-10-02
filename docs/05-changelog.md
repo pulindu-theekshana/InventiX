@@ -14,6 +14,22 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 
 ---
 
+## 2026-10-02 — Till settings made readable, and three till bugs
+**Fixed.** Settings were read from an empty cache before the real ones arrived, so the shift screen
+said "no cashiers added yet" to a shop with three, and the settings screen opened unlocked for a
+shop that had set a PIN. `src/pos/settings.ts` now waits for the first load and tells open screens
+when fresh settings arrive.
+
+**Fixed.** `/pos` rendered for a signed-out browser. The till now requires a signed-in shop account
+and sends a supplier to their own home.
+
+**Changed.** Settings show what is saved — "A PIN is set", the two limits as amounts — each with a
+single Change button, instead of an empty field that read like nothing was saved. The limits say
+they apply to the whole shop. Cashiers can be added or removed at any time, and the shift screen
+always links to settings.
+
+**Added.** A Settings link on the till itself, behind the owner PIN.
+
 ## 2026-10-01 — Phase 5 of the POS: who may use the till
 **Added.** `database/migrations/0028_pos_settings.sql` — one row per shop: the owner's PIN hash,
 the cashiers, and the limits above which the owner is asked.

@@ -47,7 +47,7 @@ export default function Sell() {
   const { profile } = useAuth();
   const [cashier, setCashier] = useState<string | null>(null);
   /** What the owner is being asked to approve, or null when nothing is waiting. */
-  const [approving, setApproving] = useState<'discount' | 'leave' | null>(null);
+  const [approving, setApproving] = useState<'discount' | 'leave' | 'settings' | null>(null);
 
   const [query, setQuery] = useState('');
   const [lines, setLines] = useState<CartLine[]>([]);
@@ -130,6 +130,15 @@ export default function Sell() {
     void finish();
   }
 
+  /** The owner's screen, so it is behind the owner's PIN whenever one is set. */
+  function settingsPressed() {
+    if (settings.locked()) {
+      setApproving('settings');
+      return;
+    }
+    router.push('/pos/settings');
+  }
+
   async function leavePressed() {
     if (settings.locked()) {
       setApproving('leave');
@@ -187,6 +196,10 @@ export default function Sell() {
           returnKeyType="done"
           containerStyle={styles.flex}
         />
+        <Pressable onPress={settingsPressed} style={styles.link}>
+          <Ionicons name="settings-outline" size={20} color={colors.accent} />
+          <Text style={[text.caption, { color: colors.accent }]}>Settings</Text>
+        </Pressable>
         <Pressable onPress={leavePressed} style={styles.link}>
           <Ionicons name="exit-outline" size={20} color={colors.accent} />
           <Text style={[text.caption, { color: colors.accent }]}>Leave</Text>
@@ -406,13 +419,16 @@ export default function Sell() {
         reason={
           approving === 'discount'
             ? `A discount of ${currency(discountValue)} is above the limit.`
-            : 'Leaving the till opens the rest of the app.'
+            : approving === 'settings'
+              ? 'Till settings change who may sell and what needs your approval.'
+              : 'Leaving the till opens the rest of the app.'
         }
         onCancel={() => setApproving(null)}
         onApproved={async () => {
           const what = approving;
           setApproving(null);
           if (what === 'discount') return finish();
+          if (what === 'settings') return router.push('/pos/settings');
           await shift.end();
           router.replace('/stocks');
         }}

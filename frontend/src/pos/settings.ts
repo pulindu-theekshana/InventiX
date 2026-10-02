@@ -21,21 +21,38 @@ export const DEFAULTS: PosSettings = {
 };
 
 let cache: PosSettings | null = null;
+const listeners = new Set<() => void>();
+
+export function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
 
 /**
- * Cached, then refreshed in the background. A till that could only lock while online would
- * unlock itself exactly when the shop's connection drops, which is backwards.
+ * Reads what this device already knows, and waits for the server only when it knows nothing.
+ *
+ * The first version returned an empty copy immediately and refreshed in the background, so a
+ * screen asked "are there cashiers?" before the answer existed and showed "none added yet" to a
+ * shop that had three. Waiting the first time is the honest trade: it is one request, once.
  */
 export async function load(): Promise<PosSettings> {
-  if (!cache) {
-    try {
-      cache = JSON.parse((await AsyncStorage.getItem(KEY)) ?? 'null') ?? DEFAULTS;
-    } catch {
-      cache = DEFAULTS;
-    }
+  if (cache) {
+    void refresh();
+    return cache;
   }
-  void refresh();
-  return cache as PosSettings;
+
+  try {
+    const stored = JSON.parse((await AsyncStorage.getItem(KEY)) ?? 'null') as PosSettings | null;
+    if (stored) {
+      cache = stored;
+      void refresh();
+      return stored;
+    }
+  } catch {
+    // Unreadable storage is not worth stopping the till for; ask the server instead.
+  }
+
+  return (await refresh()) ?? DEFAULTS;
 }
 
 export async function refresh(): Promise<PosSettings | null> {
@@ -43,6 +60,8 @@ export async function refresh(): Promise<PosSettings | null> {
     const fresh = await getSettings();
     cache = fresh;
     await AsyncStorage.setItem(KEY, JSON.stringify(fresh));
+    // Screens that are already open follow the new answer rather than the one they opened with.
+    listeners.forEach((l) => l());
     return fresh;
   } catch {
     // Offline, or not signed in yet. The cached copy stays in force.
@@ -54,6 +73,7 @@ export async function save(next: PosSettings): Promise<PosSettings> {
   const stored = await saveSettings(next);
   cache = stored;
   await AsyncStorage.setItem(KEY, JSON.stringify(stored));
+  listeners.forEach((l) => l());
   return stored;
 }
 

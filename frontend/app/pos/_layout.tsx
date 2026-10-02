@@ -6,13 +6,24 @@
  * Look here when : The till shows the shop owner's chrome, or back from a till screen leaves the till.
  */
 
-import { Stack } from 'expo-router';
+import { Redirect, Stack } from 'expo-router';
+import { useAuth } from '../../src/hooks/useAuth';
 import { colors } from '../../src/theme/colors';
 import { text } from '../../src/theme/typography';
 
 export const unstable_settings = { initialRouteName: 'index' };
 
 export default function PosLayout() {
+  const { status, role } = useAuth();
+
+  /**
+   * The till showed its screens to a signed-out browser: nothing loaded, so it looked like a
+   * shop with no cashiers and no products. A supplier has no counter, so they are sent home too.
+   */
+  if (status === 'loading') return null;
+  if (status !== 'signedIn') return <Redirect href="/(auth)/login" />;
+  if (role === 'supplier') return <Redirect href="/(supplier)/listings" />;
+
   return (
     <Stack
       screenOptions={{

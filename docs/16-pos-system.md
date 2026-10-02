@@ -273,6 +273,20 @@ connection.
 **A shop with no cashiers is not forced to invent one.** The till offers "sell as the owner",
 because a one-person shop should not have to configure a lock against nobody.
 
+### Paths through the till
+
+```
+/pos          the counter — needs a signed-in shop account and a started shift
+/pos/shift    who is at the till; always links to settings
+/pos/settings the owner's screen — behind the owner PIN whenever one is set
+/pos/returns  goods coming back (also reached by tapping a bill on day close)
+/pos/close    day close, and ending the shift
+```
+
+Back from settings goes to the counter when someone is on shift, and to the shift screen when
+nobody is. The till refuses a signed-out browser and sends a supplier to their own home screen —
+it used to render its screens to anyone, which looked like a shop with no cashiers and no stock.
+
 ### What this is, honestly
 
 **A lock on the screens, not on the data.** The cashier is using the owner's login, so the token in

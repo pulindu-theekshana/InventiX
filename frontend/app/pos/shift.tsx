@@ -6,7 +6,7 @@
  * Look here when : The till will not start, or a cashier's PIN is refused.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,11 +29,19 @@ export default function Shift() {
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const [ready, setReady] = useState(false);
+
   useFocusEffect(
     useCallback(() => {
-      settings.load().then((s) => setCashiers(s.cashiers));
+      // Awaited: showing "no cashiers yet" to a shop that has three is worse than a short wait.
+      settings.load().then((s) => {
+        setCashiers(s.cashiers);
+        setReady(true);
+      });
     }, []),
   );
+
+  useEffect(() => settings.subscribe(() => setCashiers(settings.current().cashiers)), []);
 
   async function begin() {
     if (!chosen || !profile) return;
@@ -49,6 +57,8 @@ export default function Shift() {
    * A shop that has added no cashiers is a one-person shop: the owner sells, and asking them to
    * invent a cashier for themselves would be a lock against nobody.
    */
+  if (!ready) return <View style={styles.center} />;
+
   if (cashiers.length === 0) {
     return (
       <View style={styles.center}>
@@ -101,6 +111,13 @@ export default function Shift() {
         ))}
       </View>
 
+      <Pressable onPress={() => router.push('/pos/settings')} style={styles.settingsLink}>
+        <Ionicons name="settings-outline" size={18} color={colors.accent} />
+        <Text style={[text.label, { color: colors.accent }]}>
+          Till settings — add or remove cashiers
+        </Text>
+      </Pressable>
+
       {chosen ? (
         <View style={styles.pinBox}>
           <Input
@@ -146,4 +163,5 @@ const styles = StyleSheet.create({
   },
   personOn: { backgroundColor: colors.primaryTint },
   pinBox: { gap: spacing.md },
+  settingsLink: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
 });
