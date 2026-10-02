@@ -40,6 +40,12 @@ export default function TillSettings() {
   const [refund, setRefund] = useState('');
 
   const [staff, setStaff] = useState<CashierAccount[]>([]);
+  /**
+   * Separate from `error`, because "we could not read the list" and "the list is empty" look
+   * identical once the list is empty -- and the screen said "nobody added yet" to a shop whose
+   * request had simply failed while the backend was restarting.
+   */
+  const [staffFailed, setStaffFailed] = useState(false);
   const [newName, setNewName] = useState('');
   const [newPassword, setNewPassword] = useState('');
   /** The login just made. It stays on screen until dismissed: nothing stores it for the owner. */
@@ -58,8 +64,9 @@ export default function TillSettings() {
   const loadStaff = useCallback(async () => {
     try {
       setStaff(await listCashiers());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not read your cashiers.');
+      setStaffFailed(false);
+    } catch {
+      setStaffFailed(true);
     }
   }, []);
 
@@ -179,7 +186,19 @@ export default function TillSettings() {
           </View>
         ) : null}
 
-        {staff.length === 0 ? (
+        {staffFailed ? (
+          <View style={styles.statusRow}>
+            <Ionicons name="cloud-offline-outline" size={18} color={colors.warning} />
+            <Text style={[text.caption, styles.flex]}>
+              Could not reach the backend, so this list may be out of date.
+            </Text>
+            <Pressable onPress={loadStaff} hitSlop={8}>
+              <Text style={[text.caption, { color: colors.accent }]}>Try again</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {!staffFailed && staff.length === 0 ? (
           <Text style={[text.caption, styles.muted]}>
             Nobody added yet, so you are the one selling.
           </Text>

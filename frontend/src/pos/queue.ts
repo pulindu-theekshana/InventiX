@@ -8,7 +8,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { recordSale } from '../api/pos';
-import { nextReceiptNo } from './device';
+import { catchUpWithServer, nextReceiptNo } from './device';
 import { ApiError } from '../lib/errors';
 import type { SalePayload } from '../types/api';
 
@@ -132,6 +132,13 @@ export async function sync({ force = false } = {}): Promise<{ sent: number; left
          * their number, which is worth far less than the sale.
          */
         if (error instanceof ApiError && error.code === 'receipt_taken') {
+          /**
+           * Ask the shop where its numbering has reached before picking a new number. Taking
+           * the next local one instead meant three colliding bills needed three attempts --
+           * each renumber landed on the number the bill behind it had just taken. One request
+           * moves the counter past everything the shop has, so the retry is the last one.
+           */
+          await catchUpWithServer();
           const renumbered = { ...row.sale, receipt_no: await nextReceiptNo() };
           try {
             await recordSale(renumbered);
