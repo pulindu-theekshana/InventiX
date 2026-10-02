@@ -44,3 +44,11 @@ export async function getSettings(): Promise<PosSettings> {
 export async function saveSettings(settings: PosSettings): Promise<PosSettings> {
   return request('/customer/pos/settings', { method: 'PUT', body: JSON.stringify(settings) });
 }
+
+/** Where this shop's numbering has reached for a till, so a device with cleared storage fits in. */
+export async function nextReceiptNo(deviceId: string): Promise<string> {
+  const body = await request<{ receipt_no: string }>(
+    `/customer/pos/next-receipt?device=${encodeURIComponent(deviceId)}`,
+  );
+  return body.receipt_no;
+}

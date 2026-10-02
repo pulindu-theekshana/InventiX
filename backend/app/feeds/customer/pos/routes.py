@@ -55,6 +55,12 @@ def save_settings(body: PosSettingsIn, user: CustomerDep) -> PosSettingsOut:
     return service.save_settings(user.db, user.id, body)
 
 
+@router.get("/next-receipt")
+def next_receipt(user: CustomerDep, device: str = "T1") -> dict:
+    """Where this shop's numbering has reached for that till, so a reset device does not collide."""
+    return {"receipt_no": service.next_receipt(user.db, user.id, device)}
+
+
 @router.get("/summary", response_model=DaySummaryOut)
 def day_summary(
     user: CustomerDep,

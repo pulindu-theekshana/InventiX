@@ -64,6 +64,8 @@ export default function Sell() {
     useCallback(() => {
       stocks.refresh();
       settings.load();
+      // Once per visit, and only when online: see device.catchUpWithServer.
+      void device.catchUpWithServer();
       // No shift started means nobody has said who is at the counter, so bills would carry no
       // name. Sent there rather than silently recording sales as "unknown".
       shift.load().then((who) => {

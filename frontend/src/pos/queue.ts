@@ -8,6 +8,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { recordSale } from '../api/pos';
+import { nextReceiptNo } from './device';
 import { ApiError } from '../lib/errors';
 import type { SalePayload } from '../types/api';
 
@@ -119,6 +120,26 @@ export async function sync(): Promise<{ sent: number; left: number }> {
         sent += 1;
         console.info('[till] sent', row.sale.receipt_no);
       } catch (error) {
+        /**
+         * The shop already has a bill with this number, so this one can never be stored as it
+         * stands. The sale is real money and must not be dropped: it is given the next free
+         * number and sent again. The customer's paper slip and the stored bill then differ by
+         * their number, which is worth far less than the sale.
+         */
+        if (error instanceof ApiError && error.code === 'receipt_taken') {
+          const renumbered = { ...row.sale, receipt_no: await nextReceiptNo() };
+          try {
+            await recordSale(renumbered);
+            sent += 1;
+            console.info('[till] sent as', renumbered.receipt_no, 'was', row.sale.receipt_no);
+            continue;
+          } catch {
+            keep.push({ ...row, sale: renumbered, attempts: row.attempts + 1,
+              lastError: 'Renumbered and still not sent.' });
+            continue;
+          }
+        }
+
         /**
          * A 4xx is the backend saying this bill is wrong; sending it again changes nothing.
          * Anything else -- no network, a timeout, a 500 -- is worth retrying, so it stays

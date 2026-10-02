@@ -14,6 +14,17 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 
 ---
 
+## 2026-10-02 — Till: sales that could never be sent
+**Fixed.** A bill whose receipt number the shop had already used made the backend return 500, and
+the till kept it waiting for ever. It is now a 409 (`receipt_taken`); the till renumbers the bill
+and sends it again.
+
+**Added.** `GET /customer/pos/next-receipt` — the till moves its counter forward on opening, so a
+device whose storage was cleared does not restart at 1 and collide.
+
+**Added.** A request timeout (20s) in `api/client.ts`, a stuck-run guard in the send queue, and the
+reason and address shown on day close when something has not been sent.
+
 ## 2026-10-02 — Till settings made readable, and three till bugs
 **Fixed.** Settings were read from an empty cache before the real ones arrived, so the shift screen
 said "no cashiers added yet" to a shop with three, and the settings screen opened unlocked for a

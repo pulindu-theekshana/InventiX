@@ -375,3 +375,25 @@ hash.
 **Affects.** Spec §6.6. `database/migrations/0028_pos_settings.sql`,
 `backend/app/feeds/customer/pos/`, `frontend/src/pos/{pin,settings,shift}.ts`,
 `frontend/app/pos/{shift,settings}.tsx`, `frontend/src/components/OwnerPin.tsx`.
+
+
+## D-021 — A receipt number already in use is a conflict the till recovers from
+
+**Decision.** `record_sale` turns the unique-violation on `(owner_id, receipt_no)` into a 409 with
+code `receipt_taken` instead of letting it become a 500. The till asks `GET /customer/pos/
+next-receipt` when it opens and moves its counter forward if the shop is further along, and a
+queued bill that comes back `receipt_taken` is renumbered and sent again rather than retried or
+dropped.
+
+**Reason.** The counter lives on the device so a bill can be numbered offline, and that means
+clearing the browser's data sends it back to 1 — every bill then collides with one already stored.
+Three real sales sat unsent for ever behind a 500 the till could only read as "try later", and
+because an unhandled 500 carries no CORS headers, the browser reported it as a CORS error, which
+sent the search in the wrong direction entirely.
+
+**Alternatives.** Server-assigned numbers (rejected: impossible offline, which is the whole point
+of the till). Dropping a clashing bill (rejected: that is real money). Leaving it `stuck` for the
+owner to sort out by hand (rejected: it is recoverable without them).
+
+**Affects.** Spec §6.6. `backend/app/feeds/customer/pos/{service,routes}.py`,
+`frontend/src/pos/{device,queue}.ts`.

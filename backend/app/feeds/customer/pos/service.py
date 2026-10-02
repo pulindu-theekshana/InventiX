@@ -10,7 +10,7 @@ import logging
 from datetime import date
 from decimal import Decimal
 
-from ....core.exceptions import NotFound, ValidationFailed
+from ....core.exceptions import Conflict, NotFound, ValidationFailed
 from ....core.supabase import service_client
 from ....domain import pos as rules
 from ....domain import seasonal, stock
@@ -98,18 +98,30 @@ def record_sale(db, owner_id: str, data: SaleIn) -> SaleOut:
         data.discount,
     )
 
-    sale = service_client().table("pos_sales").insert({
-        "owner_id": owner_id,
-        "kind": "sale",
-        "receipt_no": data.receipt_no,
-        "device_id": data.device_id,
-        "sold_at": data.sold_at.isoformat(),
-        "payment_method": data.payment_method,
-        "discount": float(rules.money(data.discount)),
-        "total": float(total),
-        "cashier_label": data.cashier_label,
-        "client_sale_id": data.client_sale_id,
-    }).execute().data[0]
+    try:
+        sale = service_client().table("pos_sales").insert({
+            "owner_id": owner_id,
+            "kind": "sale",
+            "receipt_no": data.receipt_no,
+            "device_id": data.device_id,
+            "sold_at": data.sold_at.isoformat(),
+            "payment_method": data.payment_method,
+            "discount": float(rules.money(data.discount)),
+            "total": float(total),
+            "cashier_label": data.cashier_label,
+            "client_sale_id": data.client_sale_id,
+        }).execute().data[0]
+    except Exception as exc:
+        # The database refuses a receipt number this shop has already used. That is a
+        # conflict, not a server fault: a till whose stored counter was reset -- cleared
+        # browser data, a new laptop -- starts again at 1 and collides. Said plainly, the
+        # till can renumber and resend; as a 500 it retried the same number for ever.
+        if "pos_sale_receipt_is_unique_per_shop" in str(exc):
+            raise Conflict(
+                f"Receipt {data.receipt_no} already exists for this shop.",
+                code="receipt_taken",
+            ) from exc
+        raise
 
     items = [
         {
@@ -393,3 +405,24 @@ def save_settings(db, owner_id: str, data: PosSettingsIn) -> PosSettingsOut:
         "cashiers": [c.model_dump() for c in data.cashiers],
     }).execute()
     return get_settings(db, owner_id)
+
+
+def next_receipt(db, owner_id: str, device_id: str) -> str:
+    """
+    The number this till should use next, read from what the shop already has.
+
+    A till keeps its own counter so it can number bills with no connection, but that counter
+    lives on the device: clear the browser data and it starts at 1 again, colliding with every
+    bill already stored. Asking once, while online, is what stops that.
+    """
+    rows = (
+        db.table("pos_sales").select("receipt_no")
+        .eq("owner_id", owner_id).like("receipt_no", f"{device_id}-%")
+        .execute().data or []
+    )
+    highest = 0
+    for row in rows:
+        tail = row["receipt_no"].rsplit("-", 1)[-1]
+        if tail.isdigit():
+            highest = max(highest, int(tail))
+    return f"{device_id}-{highest + 1:06d}"
