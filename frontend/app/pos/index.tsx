@@ -36,6 +36,7 @@ import * as queue from '../../src/pos/queue';
 import * as settings from '../../src/pos/settings';
 import { signOut } from '../../src/stores/authStore';
 import { newId } from '../../src/pos/ids';
+import { canPrint, printReceipt, type ReceiptBill } from '../../src/pos/receipt';
 import type { CartLine } from '../../src/pos/cart';
 import type { StockItemView } from '../../src/types/api';
 
@@ -60,7 +61,8 @@ export default function Sell() {
   const [cashGiven, setCashGiven] = useState('');
   const [payment, setPayment] = useState<Payment>('cash');
   const [error, setError] = useState<string | null>(null);
-  const [lastReceipt, setLastReceipt] = useState<string | null>(null);
+  /** The whole bill, not just its number: a customer asking for a copy wants the lines. */
+  const [lastBill, setLastBill] = useState<ReceiptBill | null>(null);
 
   /** Focus goes back to the search box after every action: a scanner types, it does not tap. */
   const searchBox = useRef<TextInput>(null);
@@ -74,6 +76,34 @@ export default function Sell() {
       searchBox.current?.focus();
     }, []),
   );
+
+  /**
+   * A barcode scanner is a keyboard. It types wherever focus happens to be -- and after a tap on
+   * a quantity stepper or a payment button, that is not the search box, so the first scan of the
+   * next customer went nowhere. Any character typed outside a text field is taken as the start of
+   * a scan: the box is focused and the character is put in by hand, because relying on the browser
+   * to deliver a key to an element focused during that same keystroke loses the first digit.
+   */
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+
+    function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      // Letters, digits and the separators barcodes use. Deliberately not space or Enter, which
+      // belong to whatever button the cashier has just tabbed to.
+      if (!/^[A-Za-z0-9\-_.]$/.test(event.key)) return;
+
+      event.preventDefault();
+      searchBox.current?.focus();
+      setQuery((current) => current + event.key);
+    }
+
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   const items = stocks.data ?? [];
 
@@ -163,7 +193,21 @@ export default function Sell() {
           unit_price: l.unit_price,
         })),
       });
-      setLastReceipt(receipt_no);
+      setLastBill({
+        receipt_no,
+        sold_at: new Date().toISOString(),
+        shop: profile?.business_name ?? 'InventiX',
+        cashier,
+        lines: lines.map((l) => ({
+          name: l.name,
+          quantity: l.quantity,
+          unit_price: l.unit_price,
+        })),
+        discount: discountValue,
+        total,
+        tendered: payment === 'cash' ? tendered : null,
+        change: payment === 'cash' ? changeDue : null,
+      });
       clearBill();
       // The stock figures on screen are now one sale out of date.
       stocks.refresh();
@@ -237,17 +281,29 @@ export default function Sell() {
         The last bill stays on screen until the next one is finished. It used to disappear as
         soon as an item was scanned, which is exactly when a customer asks for the number.
       */}
-      {lastReceipt ? (
-        <Pressable
-          onPress={() => router.push(`/pos/returns?receipt=${encodeURIComponent(lastReceipt)}`)}
-          style={styles.lastBill}
-        >
+      {lastBill ? (
+        <View style={styles.lastBill}>
           <Ionicons name="checkmark-circle" size={18} color={colors.success} />
           <Text style={[text.label, styles.flex]}>
-            Last bill <Text style={text.bodyStrong}>{lastReceipt}</Text>
+            Last bill <Text style={text.bodyStrong}>{lastBill.receipt_no}</Text>
           </Text>
-          <Text style={[text.caption, { color: colors.accent }]}>Return</Text>
-        </Pressable>
+          {/* Printing is the browser's, so there is nothing to offer on a phone. */}
+          {canPrint() ? (
+            <Pressable onPress={() => printReceipt(lastBill)} style={styles.lastAction}>
+              <Ionicons name="print-outline" size={16} color={colors.accent} />
+              <Text style={[text.caption, { color: colors.accent }]}>Print</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={() =>
+              router.push(`/pos/returns?receipt=${encodeURIComponent(lastBill.receipt_no)}`)
+            }
+            style={styles.lastAction}
+          >
+            <Ionicons name="arrow-undo-outline" size={16} color={colors.accent} />
+            <Text style={[text.caption, { color: colors.accent }]}>Return</Text>
+          </Pressable>
+        </View>
       ) : null}
 
       {query.trim().length > 0 ? (
@@ -280,7 +336,7 @@ export default function Sell() {
             {/* After a sale the till is not waiting for a first item, it is waiting for a
                 customer. Saying "scan the first item" there reads like nothing was recorded. */}
             <Text style={[text.label, styles.muted]}>
-              {lastReceipt ? 'Ready for the next customer' : 'Scan the first item'}
+              {lastBill ? 'Ready for the next customer' : 'Scan the first item'}
             </Text>
 
           </View>
@@ -436,6 +492,7 @@ const styles = StyleSheet.create({
   bar: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg },
   status: { alignItems: 'flex-end', gap: 2 },
   link: { alignItems: 'center', gap: 2 },
+  lastAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   lastBill: {
     flexDirection: 'row',
     alignItems: 'center',

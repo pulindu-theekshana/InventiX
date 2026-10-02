@@ -24,6 +24,7 @@ import { findSale, recordReturn } from '../../src/api/pos';
 import * as device from '../../src/pos/device';
 import * as settings from '../../src/pos/settings';
 import { newId } from '../../src/pos/ids';
+import { canPrint, printReceipt } from '../../src/pos/receipt';
 import type { Sale } from '../../src/types/api';
 
 export default function Returns() {
@@ -136,10 +137,40 @@ export default function Returns() {
 
       {bill ? (
         <View style={styles.bill}>
-          <Text style={text.h2}>{bill.receipt_no}</Text>
-          <Text style={[text.caption, styles.muted]}>
-            {new Date(bill.sold_at).toLocaleString()} · {currency(bill.total)} paid
-          </Text>
+          <View style={styles.billHead}>
+            <View style={styles.flex}>
+              <Text style={text.h2}>{bill.receipt_no}</Text>
+              <Text style={[text.caption, styles.muted]}>
+                {new Date(bill.sold_at).toLocaleString()} · {currency(bill.total)} paid
+              </Text>
+            </View>
+            {/* A customer who lost their slip, or a bill the owner wants on paper. The copy is
+                printed from what the backend holds, not from what the till remembers. */}
+            {canPrint() ? (
+              <Pressable
+                onPress={() =>
+                  printReceipt({
+                    receipt_no: bill.receipt_no,
+                    sold_at: bill.sold_at,
+                    shop: profile?.business_name ?? 'InventiX',
+                    cashier: bill.cashier_label ?? null,
+                    lines: bill.lines.map((l) => ({
+                      name: l.name,
+                      quantity: l.quantity,
+                      unit_price: l.unit_price,
+                    })),
+                    discount: bill.discount,
+                    total: bill.total,
+                    kind: bill.kind === 'return' ? 'return' : 'sale',
+                  })
+                }
+                style={styles.printCopy}
+              >
+                <Ionicons name="print-outline" size={16} color={colors.accent} />
+                <Text style={[text.caption, { color: colors.accent }]}>Print a copy</Text>
+              </Pressable>
+            ) : null}
+          </View>
 
           {bill.lines.map((line) => {
             const remaining = left(line);
@@ -221,6 +252,8 @@ export default function Returns() {
 }
 
 const styles = StyleSheet.create({
+  billHead: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  printCopy: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   scroll: { padding: spacing.lg, gap: spacing.md },
   find: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
   flex: { flex: 1 },
