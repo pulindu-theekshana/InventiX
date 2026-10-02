@@ -21,6 +21,7 @@ from .schemas import (
     ReturnIn,
     SaleIn,
     SaleOut,
+    TillActivityOut,
 )
 
 router = APIRouter(prefix="/customer/pos", tags=["customer: pos"])
@@ -75,6 +76,19 @@ def day_summary(
     day: date | None = Query(default=None),  # noqa: B008 - FastAPI's documented idiom
 ) -> DaySummaryOut:
     return service.day_summary(user.db, user.shop_id, day)
+
+
+@router.get("/activity", response_model=TillActivityOut)
+def activity(
+    user: CustomerDep,
+    from_: date | None = Query(default=None, alias="from"),  # noqa: B008 - FastAPI's documented idiom
+    to: date | None = Query(default=None),  # noqa: B008 - FastAPI's documented idiom
+) -> TillActivityOut:
+    """
+    Who sold what, and what is worth a second look. CustomerDep: this is the owner checking on
+    the counter, and a cashier reading it would be the one person it is not for.
+    """
+    return service.activity(user.db, user.id, from_, to)
 
 
 @router.get("/cashiers", response_model=list[CashierAccountOut])

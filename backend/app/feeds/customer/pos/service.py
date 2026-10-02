@@ -9,7 +9,7 @@ Look here when : A sale is stored twice, stock does not drop after a sale, or th
 import logging
 import re
 import secrets
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from ....core.exceptions import Conflict, NotFound, ValidationFailed
@@ -27,6 +27,9 @@ from .schemas import (
     SaleIn,
     SaleLineOut,
     SaleOut,
+    TillActivityOut,
+    TillCashierOut,
+    TillEventOut,
 )
 
 log = logging.getLogger(__name__)
@@ -439,6 +442,99 @@ def next_receipt(db, owner_id: str, device_id: str) -> str:
     return f"{device_id}-{highest + 1:06d}"
 
 
+# ---------------------------------------------------------------------------
+# What the owner sees
+# ---------------------------------------------------------------------------
+# Day close answers "does the drawer match" for one till on one day. This answers a different
+# question -- "who did what, and is any of it odd" -- from the owner's own phone, over a range.
+
+# One query, grouped in Python, as day_summary does. A month of a small shop's bills is hundreds
+# of rows, and PostgREST cannot group without a view. The cap is what keeps that true.
+MAX_DAYS = 31
+MAX_EVENTS = 200
+
+
+def activity(db, owner_id: str, start: date | None, end: date | None) -> TillActivityOut:
+    """
+    Takings per person and every bill worth a second look, between two dates.
+
+    `cashier_id` is what makes this worth reading: it is stamped from the signed-in account
+    (migration 0029), so the name beside an amount is not something the till chose.
+    """
+    end = end or seasonal.today()
+    start = start or (end - timedelta(days=6))
+    if start > end:
+        start, end = end, start
+    # A range nobody asked for is a query nobody can afford. The screen offers a day or a week.
+    start = max(start, end - timedelta(days=MAX_DAYS - 1))
+
+    rows = (
+        db.table("pos_sales")
+        .select("receipt_no, kind, sold_at, total, discount, cashier_id, cashier_label")
+        .eq("owner_id", owner_id)
+        .gte("sold_at", f"{start.isoformat()}T00:00:00")
+        .lte("sold_at", f"{end.isoformat()}T23:59:59")
+        .order("sold_at", desc=True)
+        .execute().data or []
+    )
+
+    limits = get_settings(db, owner_id)
+
+    people: dict[tuple[str | None, str | None], TillCashierOut] = {}
+    events: list[TillEventOut] = []
+    sales = returns = discounts = 0.0
+    bills = 0
+
+    for row in rows:
+        total = float(row["total"])
+        discount = float(row["discount"])
+        key = (row.get("cashier_id"), row.get("cashier_label"))
+        person = people.setdefault(
+            key, TillCashierOut(cashier_id=key[0], cashier=key[1])
+        )
+
+        if row["kind"] == "sale":
+            bills += 1
+            sales += total
+            discounts += discount
+            person.bills += 1
+            person.sales_total += total
+            person.discounts_total += discount
+            over = discount > 0 and discount > limits.discount_limit
+        else:
+            returns += total
+            person.returns_total += total
+            over = total > limits.return_limit
+
+        # Every discount and every return. A return of nothing unusual still belongs here: it is
+        # the other way money leaves the drawer, and the owner is the one who decides what is odd.
+        if (row["kind"] == "return" or discount > 0) and len(events) < MAX_EVENTS:
+            events.append(TillEventOut(
+                receipt_no=row["receipt_no"],
+                kind=row["kind"],
+                sold_at=row["sold_at"],
+                cashier=row.get("cashier_label"),
+                cashier_id=row.get("cashier_id"),
+                total=round(total, 2),
+                discount=round(discount, 2),
+                above_limit=over,
+            ))
+
+    for person in people.values():
+        person.sales_total = round(person.sales_total, 2)
+        person.discounts_total = round(person.discounts_total, 2)
+        person.returns_total = round(person.returns_total, 2)
+
+    return TillActivityOut(
+        from_date=start.isoformat(),
+        to_date=end.isoformat(),
+        bills=bills,
+        sales_total=round(sales, 2),
+        returns_total=round(returns, 2),
+        discounts_total=round(discounts, 2),
+        by_cashier=sorted(people.values(), key=lambda c: -c.sales_total),
+        events=events,
+    )
 # ---------------------------------------------------------------------------
 # Cashier accounts
 # ---------------------------------------------------------------------------

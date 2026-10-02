@@ -14,6 +14,7 @@ import type {
   ReturnPayload,
   Sale,
   SalePayload,
+  TillActivity,
 } from '../types/api';
 
 /**
@@ -50,6 +51,14 @@ export async function getSettings(): Promise<PosSettings> {
 
 export async function saveSettings(settings: PosSettings): Promise<PosSettings> {
   return request('/customer/pos/settings', { method: 'PUT', body: JSON.stringify(settings) });
+}
+
+/**
+ * Who sold what, between two dates. The owner's screen, not the till's: the backend answers a
+ * cashier 403, so this is never called from /pos.
+ */
+export async function tillActivity(from: string, to: string): Promise<TillActivity> {
+  return request(`/customer/pos/activity?from=${from}&to=${to}`);
 }
 
 /**

@@ -180,14 +180,30 @@ export default function ReportsHome() {
         </>
       ) : (
         <>
+          {/* The till is the shop's own POS, so this is the first thing an owner wants here. */}
+          <Pressable onPress={() => router.push('/(customer)/reports/till')}>
+            <Card style={styles.gap}>
+              <View style={styles.rowStart}>
+                <Ionicons name="people-outline" size={18} color={colors.accent} />
+                <Text style={[text.bodyStrong, styles.flex]}>Till — who sold what</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+              </View>
+              <Text style={[text.label, styles.muted]}>
+                Takings per cashier, and every discount and return with the name of whoever rang
+                it. Today, or the last week or month.
+              </Text>
+            </Card>
+          </Pressable>
+
           <Card style={styles.gap}>
             <View style={styles.rowStart}>
               <Ionicons name="information-circle" size={18} color={colors.info} />
-              <Text style={[text.bodyStrong, styles.flex]}>Waiting on sales history</Text>
+              <Text style={[text.bodyStrong, styles.flex]}>Billing somewhere else too?</Text>
             </View>
             <Text style={[text.label, styles.muted]}>
-              Sales reports read what you have actually sold. Export a sales report from your POS
-              and upload it, and best sellers, movement and stock-outs start filling in.
+              Sales from your own till are already counted here. Upload a sales file only for the
+              bills made outside InventiX, and best sellers, movement and stock-outs fill in from
+              both.
             </Text>
           </Card>
 

@@ -158,6 +158,45 @@ class CashierTotalOut(BaseModel):
     sales_total: float
 
 
+class TillEventOut(BaseModel):
+    """One thing on a bill the owner might want to ask about: a discount, or goods coming back."""
+
+    receipt_no: str
+    kind: str
+    sold_at: datetime
+    cashier: str | None = None
+    cashier_id: str | None = None
+    total: float
+    discount: float
+    # Above the shop's own limit, so the owner should have been asked. True on a bill they were
+    # not asked about means either the limit was off or the PIN was known.
+    above_limit: bool = False
+
+
+class TillCashierOut(BaseModel):
+    """What one person took, over the whole range rather than one day."""
+
+    cashier_id: str | None = None
+    cashier: str | None = None
+    bills: int = 0
+    sales_total: float = 0
+    discounts_total: float = 0
+    returns_total: float = 0
+
+
+class TillActivityOut(BaseModel):
+    """The owner's view of the counter: who sold what, and what is worth a second look."""
+
+    from_date: str
+    to_date: str
+    bills: int
+    sales_total: float
+    returns_total: float
+    discounts_total: float
+    by_cashier: list[TillCashierOut] = []
+    events: list[TillEventOut] = []
+
+
 class DaySummaryOut(BaseModel):
     """What the cashier counts the drawer against at closing time."""
 

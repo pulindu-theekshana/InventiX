@@ -16,6 +16,7 @@ export default function ReportsLayout() {
   return (
     <Stack screenOptions={feedStackScreenOptions}>
       <Stack.Screen name="index" options={{ title: 'Reports' }} />
+      <Stack.Screen name="till" options={{ title: 'Till activity' }} />
       <Stack.Screen name="[type]" options={{ title: 'Report' }} />
     </Stack>
   );

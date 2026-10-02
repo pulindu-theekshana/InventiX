@@ -308,6 +308,40 @@ export interface CashierTotal {
   sales_total: number;
 }
 
+/** One thing on a bill the owner might ask about: a discount, or goods coming back. */
+export interface TillEvent {
+  receipt_no: string;
+  kind: 'sale' | 'return';
+  sold_at: string;
+  cashier: string | null;
+  cashier_id: string | null;
+  total: number;
+  discount: number;
+  /** Above the shop's own limit, so the owner should have been asked. */
+  above_limit: boolean;
+}
+
+export interface TillCashier {
+  cashier_id: string | null;
+  cashier: string | null;
+  bills: number;
+  sales_total: number;
+  discounts_total: number;
+  returns_total: number;
+}
+
+/** The owner's view of the counter, over a range rather than one day. */
+export interface TillActivity {
+  from_date: string;
+  to_date: string;
+  bills: number;
+  sales_total: number;
+  returns_total: number;
+  discounts_total: number;
+  by_cashier: TillCashier[];
+  events: TillEvent[];
+}
+
 export interface DaySummary {
   date: string;
   bills: number;
