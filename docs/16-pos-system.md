@@ -383,6 +383,33 @@ from a list was the weakest possible version of identity, and keeping it beside 
 mean two answers to "who is selling" that can disagree. `pos_settings.cashiers` is left in the
 database untouched rather than dropped: nothing reads it, and a destructive migration buys nothing.
 
+### How it was checked
+
+`backend/scripts/try_cashier_account.py` creates a temporary cashier for the shop with the most
+stock, signs in as them against the real Supabase project, and asserts both halves of the boundary:
+
+```
+PASS  GET /customer/stocks            200   sees 11 products
+PASS  GET /customer/pos/settings      200
+PASS  GET /customer/pos/summary       200
+PASS  GET /customer/pos/next-receipt  200
+PASS  GET /customer/pos/cashiers      403   owner only
+PASS  GET /customer/reports           403
+PASS  GET /customer/delivery          403
+PASS  GET /customer/suppliers         403
+PASS  GET /customer/stocks/summary    403
+PASS  PUT /customer/pos/settings      403
+PASS  POST /customer/pos/sales        201
+PASS  bill names the signed-in account, not the label the till sent
+PASS  stock moved for a cashier's sale
+```
+
+The sale is the part worth running rather than reasoning about: it is the only way to see
+`apply_stock_adjustment` accept a caller who is not the owner. The script then deletes the bill,
+its lines, its sales history and its audit rows, puts the quantity back, and removes the login, so
+the shop is left exactly as it was. The 149 unit tests still run without a database; these four
+things cannot be checked that way.
+
 ### What this is, honestly
 
 - A cashier's token can read the shop's **stock list**, because the till has to search it, and
