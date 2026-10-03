@@ -146,6 +146,12 @@ The guard is the bundle path: an export loads `/_expo/static/js/web/entry-<hash>
 server loads `/index.bundle?platform=web`. A browser also refuses a worker outside https or
 localhost, so the LAN address has no offline shell by design.
 
+**A service worker that does not change is never updated.** A browser compares the bytes of
+`sw.js`; identical bytes mean no update event, so the "new version ready" bar never appears and a
+till keeps serving the build it cached. `npm run build:web` therefore stamps `dist/sw.js` through
+`scripts/stamp-sw.mjs` — `public/sw.js` keeps the `__BUILD__` placeholder so git is not dirtied by
+every build. Never export the web build without that step.
+
 **`npx expo serve` does not fall back to index.html.** `/pos` is a 404 there, which is why the
 manifest starts the app at `/`. Any real static host for this build needs the fallback configured.
 

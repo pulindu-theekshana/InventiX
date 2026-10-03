@@ -10,10 +10,11 @@
  */
 
 /*
- * Bump this on every deploy that must not be served from an old cache. Everything under the old
- * name is deleted on activate, which is the whole upgrade mechanism.
+ * Replaced at build time by scripts/stamp-sw.mjs, so every export is a different file and the
+ * browser can see that it is. Everything under the old name is deleted on activate, which is the
+ * whole upgrade mechanism -- and an unchanged sw.js means no upgrade is ever noticed.
  */
-const VERSION = 'inventix-till-v1';
+const VERSION = 'inventix-till-__BUILD__';
 
 /*
  * What a browser needs before it can run anything. The bundle's own file names are hashed at

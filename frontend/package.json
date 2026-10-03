@@ -8,7 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "typecheck": "tsc --noEmit",
-    "build:web": "expo export -p web",
+    "build:web": "expo export -p web && node scripts/stamp-sw.mjs",
     "serve:web": "expo serve --port 8099"
   },
   "dependencies": {

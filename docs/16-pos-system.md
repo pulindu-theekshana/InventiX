@@ -525,6 +525,12 @@ on every save, and a worker caching that is a morning spent asking why a change 
 The test is the bundle's own path: an export loads `/_expo/static/js/web/entry-<hash>.js`, the dev
 server loads `/index.bundle?platform=web`.
 
+**Every build gets its own cache name.** A browser decides a worker is new by comparing the bytes
+of `sw.js`, and the first version of this file was identical between builds — so no update was
+detected, the bar never appeared, and a till served what it had cached until someone cleared it by
+hand. `npm run build:web` now stamps the file (`scripts/stamp-sw.mjs`), which is what makes the
+next decision mean anything.
+
 **A new version waits for the cashier.** The usual advice is `skipWaiting`, which lets a new build
 take over the moment it arrives — at a till, that is the screen reloading while a customer is
 mid-bill. Instead the page shows "a newer version of the till is ready" and reloads when the
