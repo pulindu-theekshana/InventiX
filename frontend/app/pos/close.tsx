@@ -21,6 +21,8 @@ import { ConfirmSignOut } from '../../src/components/ConfirmSignOut';
 import { isOffline } from '../../src/lib/network';
 import { signOut } from '../../src/stores/authStore';
 import { readDay, type TillDay } from '../../src/pos/day';
+import * as queue from '../../src/pos/queue';
+import { cartTotal } from '../../src/pos/cart';
 import { API_BASE_URL } from '../../src/api/client';
 
 export default function Close() {
@@ -29,6 +31,8 @@ export default function Close() {
   const [leaving, setLeaving] = useState(false);
   const [day, setDay] = useState<TillDay | null>(null);
   const [busy, setBusy] = useState(false);
+  /** The bill the owner has tapped Remove on, waiting for them to mean it. */
+  const [dropping, setDropping] = useState<string | null>(null);
 
   /**
    * Never throws and never shows an error: a till with no line still has to count its drawer, so
@@ -70,6 +74,49 @@ export default function Close() {
                 }, plus everything rung since.`
               : 'No connection, and nothing read from the backend today. These are the bills rung on this till.'}
           </Text>
+        </View>
+      ) : null}
+
+      {/*
+        A bill the backend refuses is not going to send itself, and until now nothing could get rid
+        of it: the till counted "1 rejected" for ever. Removing one is the owner's decision and
+        takes two taps, because a dropped sale is money that leaves no trace.
+      */}
+      {(day?.rejected ?? []).length > 0 ? (
+        <View style={styles.card}>
+          <Text style={text.title}>Refused by the backend</Text>
+          <Text style={[text.caption, styles.muted]}>
+            These are not in the figures above. Press Try now first — if a bill keeps coming back,
+            something about it is wrong and only you can decide whether to drop it.
+          </Text>
+          {day?.rejected.map((row) => (
+            <View key={row.sale.client_sale_id} style={styles.row}>
+              <View style={styles.flex}>
+                <Text style={text.bodyStrong}>{row.sale.receipt_no}</Text>
+                <Text style={[text.caption, styles.muted]}>
+                  {new Date(row.sale.sold_at).toLocaleTimeString()} ·{' '}
+                  {currency(cartTotal(row.sale.lines, row.sale.discount))} ·{' '}
+                  {row.sale.cashier_label ?? 'not recorded'}
+                </Text>
+                {row.lastError ? (
+                  <Text style={[text.caption, { color: colors.danger }]}>{row.lastError}</Text>
+                ) : null}
+              </View>
+              <Button
+                label={dropping === row.sale.client_sale_id ? 'Really remove' : 'Remove'}
+                variant="outline"
+                onPress={async () => {
+                  if (dropping !== row.sale.client_sale_id) {
+                    setDropping(row.sale.client_sale_id);
+                    return;
+                  }
+                  await queue.discard(row.sale.client_sale_id);
+                  setDropping(null);
+                  await load();
+                }}
+              />
+            </View>
+          ))}
         </View>
       ) : null}
 

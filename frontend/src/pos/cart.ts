@@ -1,15 +1,12 @@
 /**
- * Cart rules and parked bills
+ * Cart rules
  *
- * Purpose : The arithmetic behind the sell screen, and the bills a cashier sets aside while a customer fetches one more item.
+ * Purpose : The arithmetic behind the sell screen: lines, quantities, totals and change.
  * Spec    : Section 6.6
- * Look here when : A cart total is wrong, or a parked bill cannot be brought back.
+ * Look here when : A cart total is wrong, or a line does not merge with the same product.
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { StockItemView } from '../types/api';
-
-const PARKED_KEY = 'pos.parked';
 
 export interface CartLine {
   stock_item_id: string | null;
@@ -23,13 +20,6 @@ export interface CartLine {
   quantity_on_hand: number | null;
   /** True when the cashier typed the price because Stocks had none. Travels with the bill. */
   price_from_till?: boolean;
-}
-
-export interface ParkedBill {
-  id: string;
-  label: string;
-  lines: CartLine[];
-  parkedAt: string;
 }
 
 export function lineOf(item: StockItemView, quantity = 1): CartLine {
@@ -83,32 +73,4 @@ export function cartTotal(lines: { quantity: number; unit_price: number }[], dis
 
 export function change(total: number, cashGiven: number): number {
   return money(Math.max(cashGiven - total, 0));
-}
-
-/* -------------------------------------------------------------- parked bills */
-
-export async function listParked(): Promise<ParkedBill[]> {
-  try {
-    return JSON.parse((await AsyncStorage.getItem(PARKED_KEY)) ?? '[]') as ParkedBill[];
-  } catch {
-    return [];
-  }
-}
-
-export async function park(lines: CartLine[], label: string): Promise<void> {
-  const rows = await listParked();
-  const bill: ParkedBill = {
-    id: `${Date.now()}`,
-    label: label.trim() || 'Bill',
-    lines,
-    parkedAt: new Date().toISOString(),
-  };
-  await AsyncStorage.setItem(PARKED_KEY, JSON.stringify([...rows, bill]));
-}
-
-export async function unpark(id: string): Promise<CartLine[]> {
-  const rows = await listParked();
-  const found = rows.find((r) => r.id === id);
-  await AsyncStorage.setItem(PARKED_KEY, JSON.stringify(rows.filter((r) => r.id !== id)));
-  return found?.lines ?? [];
 }

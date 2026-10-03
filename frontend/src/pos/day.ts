@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { daySummary, listSales } from '../api/pos';
 import { byNewest, localDay, mergeDay, queuedAsSale } from './dayMath';
 import * as queue from './queue';
+import type { QueuedSale } from './queue';
 import type { DaySummary, Sale } from '../types/api';
 
 const KEY = 'pos.day';
@@ -27,6 +28,12 @@ export interface TillDay {
   serverAt: string | null;
   /** How many of the bills below are still waiting to be sent. */
   queued: number;
+  /**
+   * Bills the backend has refused outright. They are not in the figures above: a bill it will
+   * never accept is not money the drawer is going to explain, and the owner has to decide what
+   * happened to it.
+   */
+  rejected: QueuedSale[];
 }
 
 /**
@@ -68,9 +75,13 @@ export async function readDay(): Promise<TillDay> {
     }
   }
 
-  const waiting = (await queue.pending()).filter(
+  const today = (await queue.pending()).filter(
     (row) => localDay(new Date(row.sale.sold_at)) === date,
   );
+  // A refused bill is left out of the totals on purpose: counting money the backend has rejected
+  // would make the drawer look right while the sale is going nowhere.
+  const waiting = today.filter((row) => row.status !== 'stuck');
+  const rejected = today.filter((row) => row.status === 'stuck');
   const queuedBills = waiting.map(queuedAsSale);
 
   return {
@@ -79,5 +90,6 @@ export async function readDay(): Promise<TillDay> {
     source,
     serverAt,
     queued: queuedBills.length,
+    rejected,
   };
 }

@@ -642,6 +642,9 @@ drawer and silent printing second, auto-update third.
 
 ## Known limits
 
+- A bill the backend refuses is listed on day close with what it cost and why, and the owner can
+  remove it in two taps. It is deliberately not automatic: a dropped sale is money that leaves no
+  trace.
 - An offline till sells from the product list it last saw, so its quantities are a snapshot. The
   bill is right; the stock figure catches up when the sale is sent.
 - A cashier signs in with a made-up address on a domain nobody owns. Harmless while no mail is sent

@@ -29,6 +29,13 @@ refused instead of "something went wrong on our side".
 **Fixed.** A cashier who typed `/settings` was shown the supplier menu and told they held a
 supplier account.
 
+**Added.** Day close lists the bills the backend has refused, with what each cost, who rang it and
+why it was refused, and removes one in two taps. `queue.discard()` had existed with no screen
+behind it, so "1 rejected" could never be cleared — which matters when a cashier is removed while
+their till is offline. Refused bills are kept out of the drawer figure.
+
+**Removed.** `cart.park` / `cart.unpark` / `listParked`, written and never wired to a screen.
+
 **Decisions.** No new ones; this is the review that should have happened before the PR was drafted.
 
 ## 2026-10-03 - Tests for the money the till counts
