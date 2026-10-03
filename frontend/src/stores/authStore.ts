@@ -43,12 +43,23 @@ async function remember(profile: AuthProfile): Promise<void> {
   }
 }
 
+/**
+ * Whether the device believes it has no connection. `navigator.onLine` is only ever trustworthy
+ * when it says false -- true means "a network adapter exists", not "the internet works" -- and
+ * false is the only answer this is used for.
+ */
+function looksOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
 async function remembered(userId: string): Promise<AuthProfile | null> {
   try {
     const stored = JSON.parse((await AsyncStorage.getItem(PROFILE_KEY)) ?? 'null') as AuthProfile | null;
-    // Only for the account that is actually signed in: a laptop that has had two people on it
-    // must not hand one of them the other's role.
-    return stored && stored.id === userId ? stored : null;
+    if (!stored) return null;
+    // An empty id asks for "whoever was last signed in here", which is the offline launch: there
+    // is no session to name them. Otherwise it must be the account the session belongs to, so a
+    // laptop two people have used cannot hand one of them the other's role.
+    return !userId || stored.id === userId ? stored : null;
   } catch {
     return null;
   }
@@ -88,10 +99,29 @@ export async function initialise(): Promise<void> {
     return;
   }
   const { data } = await supabase.auth.getSession();
+
   if (!data.session) {
+    /**
+     * An access token lasts an hour, so on almost every launch Supabase refreshes it -- and a
+     * refresh is a network call. With no connection it fails, getSession answers "no session",
+     * and the till that has been signed in all week showed a cashier the login screen, which is
+     * the one screen that is useless to them offline.
+     *
+     * So: no session plus no network plus a profile remembered for this device means carry on.
+     * Nothing is unlocked by it -- every request still carries a token the backend verifies, and
+     * offline there are no requests. When the line comes back, supabase-js refreshes and the
+     * queued bills go out. If the refresh token has genuinely expired, the next online launch has
+     * a network, finds no session, and signs them out properly.
+     */
+    const offlineProfile = looksOffline() ? await remembered('') : null;
+    if (offlineProfile) {
+      set({ status: 'signedIn', profile: offlineProfile });
+      return;
+    }
     set({ status: 'signedOut' });
     return;
   }
+
   await loadProfile(data.session.user.id, data.session.user.email ?? '');
 }
 
