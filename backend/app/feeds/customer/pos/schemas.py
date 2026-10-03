@@ -67,6 +67,9 @@ class SaleLineIn(BaseModel):
     # Decimal, because rice and dhal are sold by weight.
     quantity: float = Field(gt=0)
     unit_price: float = Field(ge=0)
+    # The shop had no price for this product, so the cashier typed one. Kept because a price a
+    # cashier chooses is a price they can choose too low, and the owner's till view shows it.
+    price_from_till: bool = False
 
 
 class SaleIn(BaseModel):
@@ -136,6 +139,7 @@ class SaleLineOut(BaseModel):
     unit_price: float
     line_total: float
     returned_quantity: float = 0
+    price_from_till: bool = False
 
 
 class SaleOut(BaseModel):
@@ -171,6 +175,8 @@ class TillEventOut(BaseModel):
     # Above the shop's own limit, so the owner should have been asked. True on a bill they were
     # not asked about means either the limit was off or the PIN was known.
     above_limit: bool = False
+    # A line on this bill was priced by the cashier because the shop had no price for it.
+    priced_at_till: bool = False
 
 
 class TillCashierOut(BaseModel):

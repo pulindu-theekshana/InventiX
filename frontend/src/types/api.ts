@@ -251,6 +251,8 @@ export interface SaleLinePayload {
   /** Decimal: rice and dhal are sold by weight. */
   quantity: number;
   unit_price: number;
+  /** The shop had no price, so the cashier typed one. The owner sees it in the till view. */
+  price_from_till?: boolean;
 }
 
 /** What the till sends. Written to the device first, then sent — see src/pos/queue.ts. */
@@ -287,6 +289,7 @@ export interface SaleLine {
   unit_price: number;
   line_total: number;
   returned_quantity: number;
+  price_from_till?: boolean;
 }
 
 export interface Sale {
@@ -319,6 +322,8 @@ export interface TillEvent {
   discount: number;
   /** Above the shop's own limit, so the owner should have been asked. */
   above_limit: boolean;
+  /** A line was priced by the cashier because the shop had none for it. */
+  priced_at_till?: boolean;
 }
 
 export interface TillCashier {

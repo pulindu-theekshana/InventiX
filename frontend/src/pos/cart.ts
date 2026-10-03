@@ -21,6 +21,8 @@ export interface CartLine {
   unit_price: number;
   /** What the shop is recorded as holding, so the screen can warn without refusing the sale. */
   quantity_on_hand: number | null;
+  /** True when the cashier typed the price because Stocks had none. Travels with the bill. */
+  price_from_till?: boolean;
 }
 
 export interface ParkedBill {

@@ -37,7 +37,7 @@ log = logging.getLogger(__name__)
 SELECT = (
     "id, receipt_no, kind, sold_at, payment_method, discount, total, cashier_label, "
     "pos_sale_items(catalog_product_id, stock_item_id, quantity, unit_price, line_total, "
-    "returned_quantity, product_catalog!inner(name))"
+    "returned_quantity, price_from_till, product_catalog!inner(name))"
 )
 
 
@@ -60,6 +60,7 @@ def _out(row: dict) -> SaleOut:
                 unit_price=float(i["unit_price"]),
                 line_total=float(i["line_total"]),
                 returned_quantity=float(i["returned_quantity"]),
+                price_from_till=bool(i.get("price_from_till")),
             )
             for i in (row.get("pos_sale_items") or [])
         ],
@@ -143,6 +144,7 @@ def record_sale(db, owner_id: str, data: SaleIn, actor_id: str, actor_name: str)
             "quantity": line.quantity,
             "unit_price": line.unit_price,
             "line_total": float(rules.line_total(line.quantity, line.unit_price)),
+            "price_from_till": line.price_from_till,
         }
         for line in data.lines
     ]
@@ -470,7 +472,8 @@ def activity(db, owner_id: str, start: date | None, end: date | None) -> TillAct
 
     rows = (
         db.table("pos_sales")
-        .select("receipt_no, kind, sold_at, total, discount, cashier_id, cashier_label")
+        .select("receipt_no, kind, sold_at, total, discount, cashier_id, cashier_label, "
+                "pos_sale_items(price_from_till)")
         .eq("owner_id", owner_id)
         .gte("sold_at", f"{start.isoformat()}T00:00:00")
         .lte("sold_at", f"{end.isoformat()}T23:59:59")
@@ -506,9 +509,15 @@ def activity(db, owner_id: str, start: date | None, end: date | None) -> TillAct
             person.returns_total += total
             over = total > limits.return_limit
 
+        # A price typed at the counter belongs beside the discounts: it is the other way a bill
+        # can be worth less than it should be, and the shop fixes it by setting a price in Stocks.
+        priced_at_till = any(
+            item.get("price_from_till") for item in (row.get("pos_sale_items") or [])
+        )
+
         # Every discount and every return. A return of nothing unusual still belongs here: it is
         # the other way money leaves the drawer, and the owner is the one who decides what is odd.
-        if (row["kind"] == "return" or discount > 0) and len(events) < MAX_EVENTS:
+        if (row["kind"] == "return" or discount > 0 or priced_at_till) and len(events) < MAX_EVENTS:
             events.append(TillEventOut(
                 receipt_no=row["receipt_no"],
                 kind=row["kind"],
@@ -518,6 +527,7 @@ def activity(db, owner_id: str, start: date | None, end: date | None) -> TillAct
                 total=round(total, 2),
                 discount=round(discount, 2),
                 above_limit=over,
+                priced_at_till=priced_at_till,
             ))
 
     for person in people.values():

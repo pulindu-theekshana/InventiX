@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -72,6 +73,13 @@ export default function Sell() {
   const [learning, setLearning] = useState<string | null>(null);
   /** Set while the cashier is being asked whether they really want to be signed out. */
   const [leaving, setLeaving] = useState(false);
+  /**
+   * A product the shop has never priced, waiting for the cashier to say what it costs. Selling it
+   * at zero was the alternative, and the till used to do exactly that: a free bill, with the stock
+   * dropping all the same.
+   */
+  const [pricing, setPricing] = useState<StockItemView | null>(null);
+  const [typedPrice, setTypedPrice] = useState('');
   /** What the owner is being asked to approve, or null when nothing is waiting. */
   const [approving, setApproving] = useState<'discount' | null>(null);
 
@@ -150,8 +158,26 @@ export default function Sell() {
   const canFinish = lines.length > 0 && !shortOfCash;
 
   function add(item: StockItemView) {
+    // No price in Stocks and none from a supplier listing: ask rather than sell it for nothing.
+    if (!item.unit_price) {
+      setPricing(item);
+      setTypedPrice('');
+      setQuery('');
+      return;
+    }
     setLines((current) => cart.addLine(current, cart.lineOf(item)));
     setQuery('');
+    searchBox.current?.focus();
+  }
+
+  /** Adds the waiting product at the price the cashier typed, marked as theirs. */
+  function addAtTypedPrice() {
+    const price = Number(typedPrice);
+    if (!pricing || !(price > 0)) return;
+    const line = { ...cart.lineOf(pricing), unit_price: cart.money(price), price_from_till: true };
+    setLines((current) => cart.addLine(current, line));
+    setPricing(null);
+    setTypedPrice('');
     searchBox.current?.focus();
   }
 
@@ -238,6 +264,7 @@ export default function Sell() {
           stock_item_id: l.stock_item_id,
           quantity: l.quantity,
           unit_price: l.unit_price,
+          price_from_till: l.price_from_till ?? false,
         })),
       });
       setLastBill({
@@ -438,6 +465,7 @@ export default function Sell() {
               </Text>
               <Text style={[text.caption, styles.muted]}>
                 {item.pack_size} · {currency(item.unit_price)} each
+                {item.price_from_till ? '  ·  price typed here' : ''}
                 {item.quantity_on_hand !== null && item.quantity > item.quantity_on_hand
                   ? `  ·  only ${item.quantity_on_hand} recorded`
                   : ''}
@@ -562,6 +590,47 @@ export default function Sell() {
       {/* The one thing still worth a PIN: a discount above the shop's limit, while a cashier
           is at the counter. shopId, not profile.id -- a cashier's own id would salt a hash the
           owner's PIN could never match. */}
+      {/*
+        Asked at the counter rather than refused: the customer is standing there, and a shop that
+        cannot sell a product until the owner opens Stocks is a shop that stops using the till.
+        The price is marked as the cashier's, and the owner sees it in Reports -> Till.
+      */}
+      <Modal visible={pricing !== null} transparent animationType="fade" onRequestClose={() => setPricing(null)}>
+        <Pressable style={styles.scrim} onPress={() => setPricing(null)}>
+          <Pressable style={styles.priceCard} onPress={() => {}}>
+            <Text style={text.h2}>What does this cost?</Text>
+            <Text style={[text.label, styles.muted]}>
+              {pricing?.product.name} has no price in Stocks. Type what the customer pays for one
+              {pricing?.product.pack_size ? ` ${pricing.product.pack_size}` : ''}. Your owner will
+              see that this price came from the counter.
+            </Text>
+            <Input
+              value={typedPrice}
+              onChangeText={setTypedPrice}
+              onSubmitEditing={addAtTypedPrice}
+              placeholder="0.00"
+              keyboardType="decimal-pad"
+              autoFocus
+            />
+            <View style={styles.row}>
+              <Button
+                label="Cancel"
+                variant="outline"
+                onPress={() => setPricing(null)}
+                style={styles.flex}
+              />
+              <Button
+                label="Add to bill"
+                variant="accent"
+                onPress={addAtTypedPrice}
+                disabled={!(Number(typedPrice) > 0)}
+                style={styles.flex}
+              />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <ConfirmSignOut
         visible={leaving}
         waiting={outbox.waiting}
@@ -590,6 +659,21 @@ const styles = StyleSheet.create({
   status: { alignItems: 'flex-end', gap: 2 },
   link: { alignItems: 'center', gap: 2 },
   lastAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  scrim: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  priceCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
   lastBill: {
     flexDirection: 'row',
     alignItems: 'center',

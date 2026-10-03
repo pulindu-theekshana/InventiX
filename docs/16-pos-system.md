@@ -474,6 +474,15 @@ focused and the character is inserted by hand, because leaving the browser to de
 element focused during that same keystroke loses the first digit. Space and Enter are left alone —
 they belong to whatever button has focus.
 
+**A product with no price is asked about, not sold for nothing.** The catalog carries products the
+shop has never priced and no supplier lists, and the till added them at zero: a free bill, with the
+stock dropping all the same. The cashier is now asked what it costs, the line says "price typed
+here", and `pos_sale_items.price_from_till` (migration 0030) carries that to the owner's till view,
+which lists the bill with "set a price in Stocks". Asked rather than refused, because a customer is
+standing there and a till that cannot sell until the owner opens Stocks is a till a shop stops
+using. A price a cashier can choose is a price they can choose too low, which is what the flag is
+for.
+
 **The shop teaches itself the barcodes.** The catalog ships with none, and nobody is going to type
 EAN numbers into a form — so a code that matches nothing offers "save this barcode to a product".
 The cashier searches the product by name, taps it once, and the item is both learned and sold,

@@ -128,8 +128,8 @@ export default function TillActivityScreen() {
       <Card style={styles.card}>
         <Text style={text.title}>Worth a look</Text>
         <Text style={[text.caption, styles.muted]}>
-          Every discount and every return, newest first. A marked one was above your limit, so you
-          should have been asked for your PIN.
+          Every discount, every return, and every bill priced at the counter — newest first. A
+          marked one was above your limit, so you should have been asked for your PIN.
         </Text>
         {events.length === 0 ? (
           <Text style={[text.caption, styles.muted]}>
@@ -139,13 +139,24 @@ export default function TillActivityScreen() {
           events.map((e) => (
             <View key={e.receipt_no} style={styles.event}>
               <Ionicons
-                name={e.kind === 'return' ? 'arrow-undo-outline' : 'pricetag-outline'}
+                name={
+                  e.kind === 'return'
+                    ? 'arrow-undo-outline'
+                    : e.discount > 0
+                      ? 'pricetag-outline'
+                      : 'create-outline'
+                }
                 size={18}
                 color={e.above_limit ? colors.warning : colors.textMuted}
               />
               <View style={styles.flex}>
                 <Text style={text.body}>
-                  {e.kind === 'return' ? 'Return' : 'Discount'} · {e.cashier ?? 'Not recorded'}
+                  {e.kind === 'return'
+                    ? 'Return'
+                    : e.discount > 0
+                      ? 'Discount'
+                      : 'Price typed at the till'}{' '}
+                  · {e.cashier ?? 'Not recorded'}
                 </Text>
                 <Text style={[text.caption, styles.muted]}>
                   {e.receipt_no} · {when(e.sold_at)}
@@ -153,8 +164,12 @@ export default function TillActivityScreen() {
               </View>
               <View style={styles.amount}>
                 <Text style={[text.bodyStrong, e.above_limit && { color: colors.warning }]}>
-                  {currency(e.kind === 'return' ? e.total : e.discount)}
+                  {currency(e.kind !== 'return' && e.discount > 0 ? e.discount : e.total)}
                 </Text>
+                {/* A price the shop never set. It is fixed once, in Stocks, not at every sale. */}
+                {e.priced_at_till && e.discount === 0 ? (
+                  <Text style={[text.caption, styles.muted]}>set a price in Stocks</Text>
+                ) : null}
                 {e.above_limit ? (
                   <Text style={[text.caption, { color: colors.warning }]}>above your limit</Text>
                 ) : null}

@@ -46,6 +46,11 @@ mid-sale, and `src/components/UpdateReady.tsx` behind it.
 **Changed.** A character typed anywhere on the till now starts a search, so a scan after a tap on
 a stepper or a payment button is not lost.
 
+**Fixed.** A product with no price was added to a bill at LKR 0.00 and the sale could still be
+finished — free goods, with the stock dropping anyway. The till now asks the cashier for a price,
+marks the line, and the owner's till view lists that bill with "set a price in Stocks".
+Migration `0030_price_set_at_the_till.sql`.
+
 **Added.** Scan-to-link: an unknown barcode at the till offers to be saved to a product, which is
 how a shop whose catalog has no barcodes ever gets any. `POST /customer/stocks/{id}/barcode`,
 reachable by a cashier, written to the shared catalog and never overwritten.
