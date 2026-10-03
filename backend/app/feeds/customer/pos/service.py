@@ -583,11 +583,17 @@ def create_cashier(owner_id: str, data: CashierAccountIn) -> CashierAccountOut:
         raise Conflict("Someone with that name already has a login.")
 
     email = _login_email(name)
-    created = db.auth.admin.create_user({
-        "email": email,
-        "password": data.password,
-        "email_confirm": True,
-    })
+    try:
+        created = db.auth.admin.create_user({
+            "email": email,
+            "password": data.password,
+            "email_confirm": True,
+        })
+    except Exception as exc:
+        # Supabase refuses a password it considers weak, among other things. Said plainly here,
+        # because as a 500 it reaches the owner as "something went wrong on our side" -- which is
+        # both wrong and unactionable.
+        raise ValidationFailed(f"That login could not be created: {exc}") from exc
     user_id = created.user.id
 
     try:

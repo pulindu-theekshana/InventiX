@@ -22,7 +22,6 @@ import { isOffline } from '../../src/lib/network';
 import { signOut } from '../../src/stores/authStore';
 import { readDay, type TillDay } from '../../src/pos/day';
 import { API_BASE_URL } from '../../src/api/client';
-import type { Sale } from '../../src/types/api';
 
 export default function Close() {
   const outbox = usePosQueue();

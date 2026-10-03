@@ -134,6 +134,13 @@ not match the `exp://<ip>:8081/--/` address, even entered exactly, so it fell ba
 Workaround for testing: set the Site URL itself to `exp://<laptop ip>:8081/--/` (changes with the
 network). For a real build set it to `inventix://`.
 
+**An unhandled 500 used to reach the browser as a CORS error.** A handler registered for
+`Exception` runs in Starlette's outermost middleware, outside `CORSMiddleware`, so its response
+carried no CORS headers and the browser blamed CORS — which sent a day's debugging in the wrong
+direction while three real sales sat unsent. `core/exceptions.py` now adds the headers itself
+(`_cors_headers`), echoing only an origin that is actually allowed. The lesson stands: a 500 that
+a browser cannot read is a 500 nobody can diagnose.
+
 **The web HTML template is `frontend/public/index.html`, not `app/+html.tsx`.** `+html.tsx` is
 only rendered by `output: static`, and static pre-renders in Node where `window is not defined`
 crashes the build — which is why `app.json` says `output: single`. Expo copies `public/` to the

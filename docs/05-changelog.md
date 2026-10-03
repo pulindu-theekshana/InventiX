@@ -14,6 +14,23 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 
 ---
 
+## 2026-10-03 - Pre-merge review of the POS branch
+**Fixed (security).** `profiles_update_own` pinned `role` but not `employer_id` or `is_active`,
+both of which migration 0029 made load-bearing. With their own token and no help from the app, a
+cashier could point `employer_id` at another shop — reading its stock, its bills and its till
+settings including the owner's PIN hash — or switch `is_active` back on after being removed. Both
+confirmed against the real project and then closed by `0031_a_profile_cannot_rewrite_its_own_rank.sql`.
+`backend/scripts/try_profile_escalation.py` is the check.
+
+**Fixed.** An unhandled 500 reached the browser without CORS headers, so it was reported as a CORS
+failure. `core/exceptions.py` now adds them, and a failed cashier creation says what Supabase
+refused instead of "something went wrong on our side".
+
+**Fixed.** A cashier who typed `/settings` was shown the supplier menu and told they held a
+supplier account.
+
+**Decisions.** No new ones; this is the review that should have happened before the PR was drafted.
+
 ## 2026-10-03 - Tests for the money the till counts
 **Changed.** `activity()` fetched the bills and worked out the answers in one function, so the
 grouping and the flagging could only be checked against a live database.

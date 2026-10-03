@@ -43,11 +43,11 @@ export default function Settings() {
 
   const items = ITEMS.filter((item) => item.route !== '/settings/password' || viaGoogle === false);
 
-  // The till, for a shop that sells over a counter. A supplier has no counter, so it is not
-  // offered to them. Spec 6.6; who may open it is phase 5 of docs/16-pos-system.md.
-  const menu = profile?.role === 'customer'
-    ? [{ icon: 'calculator-outline' as const, label: 'Open the till', route: '/pos' }, ...items]
-    : items;
+  // The till, for the people who stand at a counter: the shop owner and their cashiers. A
+  // supplier has no counter, so it is not offered to them. Spec 6.6 and docs/16-pos-system.md.
+  const menu = profile?.role === 'supplier'
+    ? items
+    : [{ icon: 'calculator-outline' as const, label: 'Open the till', route: '/pos' }, ...items];
 
   async function handleSignOut() {
     setBusy(true);
@@ -73,7 +73,15 @@ export default function Settings() {
       <View style={styles.badges}>
         {profile ? (
           <Badge
-            label={profile.role === 'customer' ? 'Customer account' : 'Supplier account'}
+            label={
+              profile.role === 'customer'
+                ? 'Customer account'
+                : profile.role === 'supplier'
+                  ? 'Supplier account'
+                  : // A cashier reaching this screen by typing the address used to be told they
+                    // were a supplier, because the label only knew about two roles.
+                    'Till account'
+            }
             tone="neutral"
           />
         ) : null}

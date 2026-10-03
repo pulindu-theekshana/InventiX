@@ -11,6 +11,8 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from ..config import settings
+
 log = logging.getLogger(__name__)
 
 
@@ -94,4 +96,31 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "detail": "Something went wrong on our side. Please try again.",
                 "code": "internal_error",
             },
+            headers=_cors_headers(request),
         )
+
+
+def _cors_headers(request: Request) -> dict[str, str]:
+    """
+    The headers CORSMiddleware would have added, had it been reached.
+
+    A handler registered for `Exception` runs in Starlette's outermost middleware, outside the CORS
+    one -- so an unhandled 500 arrives at the browser with no CORS headers at all, and the browser
+    reports a CORS failure. That cost a day: three real sales sat unsent behind a 500 the till
+    could only read as "Failed to fetch", and the search went looking at CORS configuration
+    instead of at the backend.
+
+    Echoed only for an origin that is actually allowed, so a 500 is not the one response that
+    hands any website a reply it should not have.
+    """
+    origin = request.headers.get("origin")
+    if not origin:
+        return {}
+    allowed = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+    if settings.is_production and origin not in allowed:
+        return {}
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+        "Vary": "Origin",
+    }

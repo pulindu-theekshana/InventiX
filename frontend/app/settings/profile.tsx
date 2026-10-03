@@ -59,7 +59,16 @@ export default function MyProfile() {
         <Text style={[text.label, styles.muted]}>{profile.contact_person}</Text>
         <Text style={[text.label, styles.email]}>{profile.email}</Text>
         <View style={styles.badges}>
-          <Badge label={isSupplier ? 'Supplier account' : 'Customer account'} tone="neutral" />
+          <Badge
+            label={
+              isSupplier
+                ? 'Supplier account'
+                : profile.role === 'cashier'
+                  ? 'Till account'
+                  : 'Customer account'
+            }
+            tone="neutral"
+          />
           <Badge
             label={profile.is_active ? 'Active' : 'Inactive'}
             tone={profile.is_active ? 'success' : 'neutral'}
