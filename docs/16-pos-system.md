@@ -557,6 +557,12 @@ So an offline till can now open, find a product, take cash and queue the bill. W
 do: sign someone in for the first time, look up an old receipt for a return, or learn a new
 barcode. All three need the server, and all three say so rather than failing quietly.
 
+**And signing out is the trap.** Only the server can sign anyone back in, so a cashier who ends
+their shift on a dead line leaves the counter with a login screen nobody can answer. Sign out at
+the till now asks first -- naming the lack of connection, and saying that unsent bills are kept
+either way -- because at a till, staying signed in is the safer choice, which is the opposite of
+the usual advice.
+
 ### What is still only half true
 - A cashier's first sign-in on a laptop needs a connection; after that the till opens offline.
 - A static host must send unknown paths to `index.html`, or a reload on `/pos` is a 404. The

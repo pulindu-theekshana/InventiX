@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { isOffline } from '../lib/network';
 import type { AuthProfile } from '../types/api';
 import type { Role } from '../types/database';
 
@@ -41,15 +42,6 @@ async function remember(profile: AuthProfile): Promise<void> {
   } catch {
     // Storage can be full or blocked. Not a reason to fail a sign-in that worked.
   }
-}
-
-/**
- * Whether the device believes it has no connection. `navigator.onLine` is only ever trustworthy
- * when it says false -- true means "a network adapter exists", not "the internet works" -- and
- * false is the only answer this is used for.
- */
-function looksOffline(): boolean {
-  return typeof navigator !== 'undefined' && navigator.onLine === false;
 }
 
 async function remembered(userId: string): Promise<AuthProfile | null> {
@@ -113,7 +105,7 @@ export async function initialise(): Promise<void> {
      * queued bills go out. If the refresh token has genuinely expired, the next online launch has
      * a network, finds no session, and signs them out properly.
      */
-    const offlineProfile = looksOffline() ? await remembered('') : null;
+    const offlineProfile = isOffline() ? await remembered('') : null;
     if (offlineProfile) {
       set({ status: 'signedIn', profile: offlineProfile });
       return;

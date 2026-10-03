@@ -18,6 +18,8 @@ import { text } from '../../src/theme/typography';
 import { currency } from '../../src/lib/format';
 import { usePosQueue } from '../../src/hooks/usePosQueue';
 import { useAuth } from '../../src/hooks/useAuth';
+import { ConfirmSignOut } from '../../src/components/ConfirmSignOut';
+import { isOffline } from '../../src/lib/network';
 import { signOut } from '../../src/stores/authStore';
 import { daySummary, listSales } from '../../src/api/pos';
 import { API_BASE_URL } from '../../src/api/client';
@@ -26,6 +28,7 @@ import type { DaySummary, Sale } from '../../src/types/api';
 export default function Close() {
   const outbox = usePosQueue();
   const { isCashier } = useAuth();
+  const [leaving, setLeaving] = useState(false);
   const [summary, setSummary] = useState<DaySummary | null>(null);
   const [bills, setBills] = useState<Sale[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -178,13 +181,22 @@ export default function Close() {
           label="End shift and sign out"
           variant="outline"
           icon="log-out-outline"
-          onPress={async () => {
-            await signOut();
-            router.replace('/(auth)/login');
-          }}
+          onPress={() => setLeaving(true)}
           fullWidth
         />
       ) : null}
+
+      <ConfirmSignOut
+        visible={leaving}
+        waiting={outbox.waiting}
+        offline={isOffline()}
+        onCancel={() => setLeaving(false)}
+        onConfirm={async () => {
+          setLeaving(false);
+          await signOut();
+          router.replace('/(auth)/login');
+        }}
+      />
     </ScrollView>
   );
 }

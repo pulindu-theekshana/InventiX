@@ -31,6 +31,8 @@ import { useTillCatalog } from '../../src/pos/catalog';
 import { usePosQueue } from '../../src/hooks/usePosQueue';
 import { useAuth } from '../../src/hooks/useAuth';
 import { OwnerPin } from '../../src/components/OwnerPin';
+import { ConfirmSignOut } from '../../src/components/ConfirmSignOut';
+import { isOffline } from '../../src/lib/network';
 import * as cart from '../../src/pos/cart';
 import * as device from '../../src/pos/device';
 import * as queue from '../../src/pos/queue';
@@ -68,6 +70,8 @@ export default function Sell() {
    * time -- because nobody is going to type EAN numbers into a form.
    */
   const [learning, setLearning] = useState<string | null>(null);
+  /** Set while the cashier is being asked whether they really want to be signed out. */
+  const [leaving, setLeaving] = useState(false);
   /** What the owner is being asked to approve, or null when nothing is waiting. */
   const [approving, setApproving] = useState<'discount' | null>(null);
 
@@ -201,13 +205,19 @@ export default function Sell() {
    * not theirs and there is nothing for them on the other side of this button. The owner goes
    * back to their own app, and is not asked to approve themselves.
    */
-  async function leavePressed() {
-    if (isCashier) {
-      await signOut();
-      router.replace('/(auth)/login');
+  function leavePressed() {
+    // The owner is going back to their own app, which is not a sign-out and needs no warning.
+    if (!isCashier) {
+      router.replace('/stocks');
       return;
     }
-    router.replace('/stocks');
+    setLeaving(true);
+  }
+
+  async function signOutForReal() {
+    setLeaving(false);
+    await signOut();
+    router.replace('/(auth)/login');
   }
 
   async function finish() {
@@ -552,6 +562,14 @@ export default function Sell() {
       {/* The one thing still worth a PIN: a discount above the shop's limit, while a cashier
           is at the counter. shopId, not profile.id -- a cashier's own id would salt a hash the
           owner's PIN could never match. */}
+      <ConfirmSignOut
+        visible={leaving}
+        waiting={outbox.waiting}
+        offline={isOffline()}
+        onCancel={() => setLeaving(false)}
+        onConfirm={signOutForReal}
+      />
+
       <OwnerPin
         visible={approving !== null}
         shopId={shopId ?? ''}
