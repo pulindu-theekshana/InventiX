@@ -6,6 +6,7 @@
  * Look here when : The app forgets who is signed in.
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -23,6 +24,34 @@ export interface AuthState {
   pendingRole: Role | null;
   /** True when running without Supabase, so screens can say so rather than failing silently. */
   demo: boolean;
+}
+
+/**
+ * The last profile read from the server, kept so the till can start with no connection.
+ *
+ * Supabase already stores the session itself; what it cannot do is answer "who is this" offline,
+ * and without that the app signed a cashier out at the one moment they most need it -- a shop
+ * whose line is down, opening the till on a laptop that was signed in all week.
+ */
+const PROFILE_KEY = 'auth.profile';
+
+async function remember(profile: AuthProfile): Promise<void> {
+  try {
+    await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  } catch {
+    // Storage can be full or blocked. Not a reason to fail a sign-in that worked.
+  }
+}
+
+async function remembered(userId: string): Promise<AuthProfile | null> {
+  try {
+    const stored = JSON.parse((await AsyncStorage.getItem(PROFILE_KEY)) ?? 'null') as AuthProfile | null;
+    // Only for the account that is actually signed in: a laptop that has had two people on it
+    // must not hand one of them the other's role.
+    return stored && stored.id === userId ? stored : null;
+  } catch {
+    return null;
+  }
 }
 
 let state: AuthState = {
@@ -76,13 +105,27 @@ async function loadProfile(userId: string, email: string): Promise<void> {
 
   if (error || !data) {
     /**
-     * Signed in with no profile row: registration was interrupted between the auth user and
-     * the profile write. Treat as signed out rather than routing into a role-less app.
+     * Two very different failures land here, and only one of them is "sign out".
+     *
+     * No connection: the session in this browser is still valid and the person was signed in
+     * five minutes ago. Signing them out would leave a shop with a dead line unable to open its
+     * own till, which is the opposite of what the offline work is for -- so the last known
+     * profile is used instead.
+     *
+     * No profile row: registration was interrupted between the auth user and the profile write.
+     * There is nothing remembered for them, so this still ends at the login screen.
      */
+    const cached = await remembered(userId);
+    if (cached) {
+      set({ status: 'signedIn', profile: cached });
+      return;
+    }
     set({ status: 'signedOut', profile: null });
     return;
   }
-  set({ status: 'signedIn', profile: data as AuthProfile });
+  const profile = data as AuthProfile;
+  await remember(profile);
+  set({ status: 'signedIn', profile });
 }
 
 export async function signIn(email: string, password: string): Promise<void> {
@@ -160,6 +203,7 @@ export async function changePassword(current: string, next: string): Promise<voi
 
 /** After profile-setup writes the row. Without it the app is signed in to the backend but not to itself until relaunch. */
 export function completeProfile(profile: AuthProfile): void {
+  void remember(profile);
   // pendingRole is left set: clearing it would bounce profile-setup to choose-role before it navigates away. signOut clears it.
   set({ status: 'signedIn', profile });
 }
@@ -190,5 +234,8 @@ export function signInDemo(role: Role): void {
 
 export async function signOut(): Promise<void> {
   if (supabase) await supabase.auth.signOut();
+  // Deliberately before the state change: a cashier handing the laptop back should not leave
+  // their name and role on it.
+  await AsyncStorage.removeItem(PROFILE_KEY).catch(() => undefined);
   set({ status: 'signedOut', profile: null, pendingRole: null });
 }

@@ -535,11 +535,30 @@ static output pre-renders in Node, where `window is not defined` crashed the bui
 `app.json` says `output: single`). Expo copies `public/` to the root of the export and injects
 the bundle's script tag into that template.
 
-### What is still only half true
+### Opening the till with no connection
 
-- **Offline is the app's files, not its data.** The catalog the till searches is fetched from the
-  backend; a till opened cold with no connection has the screens but no products until it
-  reaches the backend once. Sales already queue on the device.
+The first offline test found the hole the install had been hiding: the app opened, and then showed
+the login screen. Two separate things were missing, and both are what "offline" has to mean at a
+counter.
+
+**Who is signed in.** Supabase keeps the session, but the app asked the server "who is this" on
+every launch, and a failed answer was treated as signed out. The profile is now remembered on the
+device and used when that request cannot be made, so a till that was signed in all week opens as
+itself on a dead line. It is cleared on sign-out, and only ever used for the account whose session
+is actually in the browser.
+
+**What the shop sells.** The product list came from the backend on every visit, so an offline till
+had an empty shop. `src/pos/catalog.ts` keeps the last copy, and the till says so on screen --
+"showing the products saved on this till from &lt;when&gt;" -- because the quantities are a
+snapshot. That is safe for billing: a sale is a record, not a request, and the backend clamps the
+stock movement when the bill finally arrives.
+
+So an offline till can now open, find a product, take cash and queue the bill. What it still cannot
+do: sign someone in for the first time, look up an old receipt for a return, or learn a new
+barcode. All three need the server, and all three say so rather than failing quietly.
+
+### What is still only half true
+- A cashier's first sign-in on a laptop needs a connection; after that the till opens offline.
 - A static host must send unknown paths to `index.html`, or a reload on `/pos` is a 404. The
   manifest therefore starts the app at `/`, which routes by role anyway.
 - `npx expo serve` does not do that fallback, so use it for the install test, not as the shop's
@@ -594,8 +613,8 @@ drawer and silent printing second, auto-update third.
 
 ## Known limits
 
-- The offline shell keeps the app's files, not the shop's catalog: a till opened cold with no
-  connection has its screens but no products until it reaches the backend once.
+- An offline till sells from the product list it last saw, so its quantities are a snapshot. The
+  bill is right; the stock figure catches up when the sale is sent.
 - A cashier signs in with a made-up address on a domain nobody owns. Harmless while no mail is sent
   to it, and it means Supabase's own password reset cannot be used for staff.
 - While a till is offline the owner's phone shows stale stock. It catches up on reconnect.

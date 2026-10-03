@@ -28,6 +28,14 @@ dependency.
 `public/index.html`. Opens from a desktop icon in its own window, and starts with no connection.
 `npm run build:web` and `npm run serve:web`.
 
+**Fixed.** An installed till with no connection showed the login screen to someone who was
+already signed in: the app asked the server who they were on every launch and read a failed
+request as a sign-out. The profile is remembered on the device and used when the server cannot be
+reached, and cleared on sign-out.
+
+**Added.** `src/pos/catalog.ts` — the till keeps the last product list it saw, so an offline
+counter can still find a product and build a bill. The screen says when the list is a stored one.
+
 **Added.** A "newer version is ready — reload now" bar instead of a worker that takes over
 mid-sale, and `src/components/UpdateReady.tsx` behind it.
 

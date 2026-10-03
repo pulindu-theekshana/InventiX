@@ -26,8 +26,8 @@ import { colors } from '../../src/theme/colors';
 import { radius, spacing } from '../../src/theme/spacing';
 import { text } from '../../src/theme/typography';
 import { currency } from '../../src/lib/format';
-import { useStocks } from '../../src/hooks/useStocks';
 import { saveBarcode } from '../../src/api/stocks';
+import { useTillCatalog } from '../../src/pos/catalog';
 import { usePosQueue } from '../../src/hooks/usePosQueue';
 import { useAuth } from '../../src/hooks/useAuth';
 import { OwnerPin } from '../../src/components/OwnerPin';
@@ -53,7 +53,7 @@ function looksLikeBarcode(value: string): boolean {
 }
 
 export default function Sell() {
-  const stocks = useStocks();
+  const catalog = useTillCatalog();
   const outbox = usePosQueue();
   /**
    * Who is at the till is who signed in. Phase 5 asked on a screen and kept the answer on the
@@ -85,7 +85,7 @@ export default function Sell() {
 
   useFocusEffect(
     useCallback(() => {
-      stocks.refresh();
+      catalog.refresh();
       settings.load();
       // Once per visit, and only when online: see device.catchUpWithServer.
       void device.catchUpWithServer();
@@ -121,7 +121,7 @@ export default function Sell() {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  const items = stocks.data ?? [];
+  const items = catalog.items;
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -163,7 +163,7 @@ export default function Sell() {
     if (!code) return;
     try {
       await saveBarcode(item.id, code);
-      stocks.refresh();
+      catalog.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That barcode could not be saved.');
     }
@@ -247,7 +247,7 @@ export default function Sell() {
       });
       clearBill();
       // The stock figures on screen are now one sale out of date.
-      stocks.refresh();
+      catalog.refresh();
       searchBox.current?.focus();
     } catch (e) {
       // Only storage can fail here; the network cannot, because nothing is sent yet.
@@ -312,7 +312,16 @@ export default function Sell() {
       </View>
 
       <ErrorBanner message={error} />
-      <ErrorBanner message={stocks.error} />
+      {/* A stored product list is worth saying out loud: the quantities are from the last time
+          the till had a line, and the shop may have sold things since. */}
+      {catalog.stale ? (
+        <Text style={[text.caption, styles.offline]}>
+          Showing the products saved on this till{catalog.updatedAt
+            ? ` from ${new Date(catalog.updatedAt).toLocaleString()}`
+            : ''}
+          . Bills are kept and sent when the connection is back.
+        </Text>
+      ) : null}
 
       {/*
         The last bill stays on screen until the next one is finished. It used to disappear as
@@ -576,6 +585,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   flexTwo: { flex: 2 },
   muted: { color: colors.textMuted },
+  offline: { color: colors.textMuted, paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
   noMatch: { padding: spacing.md, gap: spacing.md },
   learning: {
     flexDirection: 'row',
