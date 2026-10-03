@@ -160,6 +160,11 @@ file restarts uvicorn and loses them, so do not edit the backend while someone i
 
 ## Conventions
 
+- **Rules go in `domain/` and `src/pos/*Math.ts`, fetching stays in `service.py` and the hooks.**
+  A function that reads the database and decides something can only be checked against a live
+  database, which in practice means it is not checked. `summarise_till` and `dayMath` were split
+  out for exactly that reason. Run `pytest` in `backend/` and `npm test` in `frontend/`; neither
+  needs a database, and anything that would is a script in `backend/scripts/`.
 - **A migration is never edited after it has run.** Write the next numbered file. `database/functions/`
   and `database/policies/` are `create or replace` definitions and *are* edited in place.
 - **Writes from a screen go through `hooks/useSubmit.ts`.** It keeps the busy flag and the error

@@ -14,6 +14,21 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 
 ---
 
+## 2026-10-03 - Tests for the money the till counts
+**Changed.** `activity()` fetched the bills and worked out the answers in one function, so the
+grouping and the flagging could only be checked against a live database.
+`domain/pos.summarise_till()` now takes rows and limits and returns the totals; the service maps
+them to the response. Eleven tests cover what the service never could: two cashiers sharing a
+name, a zero discount at a zero limit, a refund over the limit, a price typed at the counter, the
+event cap, and numerics arriving from supabase-py as strings.
+
+**Added.** The frontend's first test runner — `jest-expo`, `npm test`. Fifteen tests over
+`src/pos/dayMath.ts`, which is the day close arithmetic split out of `day.ts`: a queued bill
+pricing itself, a card sale staying out of the cash drawer, the merge not mutating what it was
+given, cents surviving, and "today" being the device's day rather than UTC's.
+
+**Backend 164 tests, frontend 15.** Both run without a database.
+
 ## 2026-10-03 - Phase 7: printing, scanning, and installing on the laptop
 **Added.** Till activity for the owner: `GET /customer/pos/activity` and **Reports -> Till — who
 sold what**. Takings per cashier over a day, a week or a month, and every discount and return with
