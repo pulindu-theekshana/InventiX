@@ -3,8 +3,13 @@
 Mobile inventory app for Sri Lankan grocery shops. Three parts: `frontend/` (React Native,
 Expo SDK 57, expo-router), `backend/` (FastAPI, Python), `database/` (Supabase Postgres).
 
-Read `docs/00-INDEX.md` first for the full documentation set. This file is the short version
-plus the traps already discovered, so they are not rediscovered one 500 at a time.
+**This file is written for an AI assistant working on the repository.** It lives at the root
+rather than in `docs/` because the two audiences were getting mixed up: `docs/` is written for
+people — teammates, a supervisor, whoever picks this up next — while this one is operating notes,
+conventions and traps.
+
+Read `docs/00-INDEX.md` first for the full documentation set. This file is the short version plus
+the traps already discovered, so they are not rediscovered one 500 at a time.
 
 ## Architecture rules that must not be broken
 

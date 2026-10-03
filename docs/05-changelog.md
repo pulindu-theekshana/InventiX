@@ -14,6 +14,14 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 
 ---
 
+## 2026-10-03 - Documentation split by audience
+**Added.** `docs/17-what-the-pos-changed.md` — every file that already existed and had to change
+for the till, and why. Written for someone reviewing the branch or picking the project up later.
+
+**Moved.** `docs/CLAUDE.md` → `CLAUDE.md` at the root of the repository. `docs/` is for people;
+the assistant's conventions and traps are a different kind of writing and were being read as if
+they were project documentation. The root is also where the tool looks for them by default.
+
 ## 2026-10-03 - Pre-merge review of the POS branch
 **Fixed (security).** `profiles_update_own` pinned `role` but not `employer_id` or `is_active`,
 both of which migration 0029 made load-bearing. With their own token and no help from the app, a
