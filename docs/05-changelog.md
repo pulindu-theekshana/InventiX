@@ -34,6 +34,10 @@ mid-sale, and `src/components/UpdateReady.tsx` behind it.
 **Changed.** A character typed anywhere on the till now starts a search, so a scan after a tap on
 a stepper or a payment button is not lost.
 
+**Added.** Scan-to-link: an unknown barcode at the till offers to be saved to a product, which is
+how a shop whose catalog has no barcodes ever gets any. `POST /customer/stocks/{id}/barcode`,
+reachable by a cashier, written to the shared catalog and never overwritten.
+
 **Changed.** The Reports sales tab no longer says it is waiting for an uploaded POS file: sales
 from the shop's own till are already counted.
 

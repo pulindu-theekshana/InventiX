@@ -17,7 +17,7 @@ import httpx
 
 sys.path.insert(0, ".")
 
-from app.config import settings  # noqa: E402
+from app.config import settings
 
 API = "http://127.0.0.1:8000"
 

@@ -14,6 +14,7 @@ from .schemas import (
     AddStockItemIn,
     AdjustIn,
     AdjustmentOut,
+    BarcodeIn,
     SeasonalWarningOut,
     StockItemOut,
     StockSummaryOut,
@@ -62,6 +63,13 @@ def update_stock_item(
     stock_item_id: str, body: UpdateStockItemIn, user: CustomerDep
 ) -> None:
     service.update(user.db, user.id, stock_item_id, body)
+
+
+# TillDep: this is a cashier's job, done at the counter while the item is in their hand.
+@router.post("/{stock_item_id}/barcode", status_code=status.HTTP_204_NO_CONTENT)
+def save_barcode(stock_item_id: str, body: BarcodeIn, user: TillDep) -> None:
+    """Teaches the shop a barcode it did not know, by saying which product it is."""
+    service.save_barcode(user.db, user.shop_id, stock_item_id, body.barcode)
 
 
 @router.post("/{stock_item_id}/adjust", status_code=status.HTTP_204_NO_CONTENT)

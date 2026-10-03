@@ -474,6 +474,31 @@ focused and the character is inserted by hand, because leaving the browser to de
 element focused during that same keystroke loses the first digit. Space and Enter are left alone —
 they belong to whatever button has focus.
 
+**The shop teaches itself the barcodes.** The catalog ships with none, and nobody is going to type
+EAN numbers into a form — so a code that matches nothing offers "save this barcode to a product".
+The cashier searches the product by name, taps it once, and the item is both learned and sold,
+because the customer is still standing there. Every scan after that finds it.
+
+`POST /customer/stocks/{id}/barcode`, which a cashier account may call: it is done at the counter,
+by whoever is holding the item. The code is written to `product_catalog.barcode` rather than to the
+shop's own row, because a barcode belongs to the product — the same packet carries the same number
+in every shop. For the same reason it is only ever filled in, never overwritten: one shop scanning
+the wrong item must not rename a code the others are already using. A clash says which product
+already has it, and a save that fails does not stop the sale.
+
+Checked against the real project by `backend/scripts/try_barcode_learning.py`, which saves a code,
+repeats it, tries a second code for one product, tries to claim a taken code from another shop,
+tries someone else's stock item, and puts the catalog back:
+
+```
+save a new barcode                 -> 204
+same code, same product            -> 204   saying it again is not a failure
+a second code for one product      -> 409   already has the barcode 4791234567890
+another shop claiming that code    -> 409   that barcode already belongs to Sunflower Cooking Oil
+someone else's stock item          -> 404
+too short to be a barcode          -> 422
+```
+
 ### Installing it on the laptop
 
 The till is a web app, so "installing" means Chrome's own install: `public/manifest.webmanifest`

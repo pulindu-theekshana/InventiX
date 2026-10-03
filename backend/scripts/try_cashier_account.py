@@ -18,10 +18,10 @@ import httpx
 
 sys.path.insert(0, ".")
 
-from app.core.supabase import service_client  # noqa: E402
-from app.config import settings  # noqa: E402
-from app.feeds.customer.pos import service as pos  # noqa: E402
-from app.feeds.customer.pos.schemas import CashierAccountIn  # noqa: E402
+from app.config import settings
+from app.core.supabase import service_client
+from app.feeds.customer.pos import service as pos
+from app.feeds.customer.pos.schemas import CashierAccountIn
 
 API = "http://127.0.0.1:8000"
 # Unmistakable in a bill list, and removed again at the end either way.
@@ -69,7 +69,7 @@ def main() -> None:
 
     try:
         head = {"Authorization": f"Bearer {sign_in(made.login_email, password)}"}
-        g = lambda path: httpx.get(f"{API}{path}", headers=head, timeout=30)  # noqa: E731
+        g = lambda path: httpx.get(f"{API}{path}", headers=head, timeout=30)
 
         ok = True
         stocks = g("/customer/stocks")

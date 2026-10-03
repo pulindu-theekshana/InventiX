@@ -27,6 +27,7 @@ import { radius, spacing } from '../../src/theme/spacing';
 import { text } from '../../src/theme/typography';
 import { currency } from '../../src/lib/format';
 import { useStocks } from '../../src/hooks/useStocks';
+import { saveBarcode } from '../../src/api/stocks';
 import { usePosQueue } from '../../src/hooks/usePosQueue';
 import { useAuth } from '../../src/hooks/useAuth';
 import { OwnerPin } from '../../src/components/OwnerPin';
@@ -42,6 +43,15 @@ import type { StockItemView } from '../../src/types/api';
 
 type Payment = 'cash' | 'card' | 'other';
 
+/**
+ * What a scanner reads: digits, sometimes a letter prefix on a wholesaler's own label. Used only
+ * to decide whether an unknown search term is worth offering to save -- a cashier typing "milk"
+ * should not be asked which product "milk" is the barcode of.
+ */
+function looksLikeBarcode(value: string): boolean {
+  return /^[A-Za-z0-9-]{6,32}$/.test(value.trim()) && /\d{6,}/.test(value.trim());
+}
+
 export default function Sell() {
   const stocks = useStocks();
   const outbox = usePosQueue();
@@ -52,6 +62,12 @@ export default function Sell() {
    */
   const { profile, isCashier, shopId } = useAuth();
   const cashier = profile?.contact_person ?? null;
+  /**
+   * The code a scan just produced that matches nothing, while the cashier picks the product it
+   * belongs to. The shop's barcode list is built this way -- by selling, one unknown code at a
+   * time -- because nobody is going to type EAN numbers into a form.
+   */
+  const [learning, setLearning] = useState<string | null>(null);
   /** What the owner is being asked to approve, or null when nothing is waiting. */
   const [approving, setApproving] = useState<'discount' | null>(null);
 
@@ -135,9 +151,30 @@ export default function Sell() {
     searchBox.current?.focus();
   }
 
+  /**
+   * Saves the code against the product the cashier tapped, then sells it, because the customer is
+   * still standing there. A refusal is shown and the sale goes ahead anyway: a barcode that could
+   * not be saved is a thing to sort out later, not a reason to stop a bill.
+   */
+  async function learn(item: StockItemView) {
+    const code = learning;
+    setLearning(null);
+    add(item);
+    if (!code) return;
+    try {
+      await saveBarcode(item.id, code);
+      stocks.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That barcode could not be saved.');
+    }
+  }
+
   /** A scanner ends its input with Enter. One exact barcode match is added without a tap. */
   function onSubmitSearch() {
-    if (matches.length === 1) add(matches[0]);
+    if (matches.length !== 1) return;
+    // While a code is being learned, Enter on the single match means "this is the one".
+    if (learning) void learn(matches[0]);
+    else add(matches[0]);
   }
 
   function clearBill() {
@@ -306,13 +343,46 @@ export default function Sell() {
         </View>
       ) : null}
 
+      {learning ? (
+        <View style={styles.learning}>
+          <Ionicons name="barcode-outline" size={18} color={colors.brandInk} />
+          <Text style={[text.label, styles.flex]}>
+            Which product is <Text style={text.bodyStrong}>{learning}</Text>? Search for it and tap
+            it once — every scan after this will find it.
+          </Text>
+          <Pressable onPress={() => setLearning(null)} hitSlop={8}>
+            <Text style={[text.caption, { color: colors.brandInk }]}>Cancel</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       {query.trim().length > 0 ? (
         <View style={styles.results}>
           {matches.length === 0 ? (
-            <Text style={[text.label, styles.muted]}>Nothing matches “{query.trim()}”.</Text>
+            <View style={styles.noMatch}>
+              <Text style={[text.label, styles.muted]}>Nothing matches “{query.trim()}”.</Text>
+              {/* An unknown code is almost always a product the shop has but has never scanned. */}
+              {!learning && looksLikeBarcode(query) ? (
+                <Button
+                  label="Save this barcode to a product"
+                  variant="outline"
+                  icon="barcode-outline"
+                  onPress={() => {
+                    setLearning(query.trim().toUpperCase());
+                    setQuery('');
+                    searchBox.current?.focus();
+                  }}
+                  fullWidth
+                />
+              ) : null}
+            </View>
           ) : (
             matches.map((item) => (
-              <Pressable key={item.id} onPress={() => add(item)} style={styles.result}>
+              <Pressable
+                key={item.id}
+                onPress={() => (learning ? learn(item) : add(item))}
+                style={styles.result}
+              >
                 <View style={styles.flex}>
                   <Text style={text.bodyStrong}>{item.product.name}</Text>
                   <Text style={[text.caption, styles.muted]}>
@@ -506,6 +576,17 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   flexTwo: { flex: 2 },
   muted: { color: colors.textMuted },
+  noMatch: { padding: spacing.md, gap: spacing.md },
+  learning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryTint,
+  },
   results: {
     marginHorizontal: spacing.lg,
     backgroundColor: colors.surface,

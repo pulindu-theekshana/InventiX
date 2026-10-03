@@ -126,6 +126,18 @@ export async function adjustQuantity(
   });
 }
 
+/**
+ * Teaches the shop a barcode by saying which product it is. Sent from the till, by whoever is
+ * holding the item -- which is why the backend lets a cashier account do it.
+ */
+export async function saveBarcode(stockItemId: string, barcode: string): Promise<void> {
+  if (useMockData) return mock(undefined);
+  return request(`/customer/stocks/${stockItemId}/barcode`, {
+    method: 'POST',
+    body: JSON.stringify({ barcode }),
+  });
+}
+
 export async function updateThreshold(stockItemId: string, threshold: number): Promise<void> {
   if (useMockData) return mock(undefined);
   return request(`/customer/stocks/${stockItemId}`, {

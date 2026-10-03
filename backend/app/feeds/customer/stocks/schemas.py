@@ -87,6 +87,14 @@ class UpdateStockItemIn(BaseModel):
     preferred_supplier_id: str | None = None
 
 
+class BarcodeIn(BaseModel):
+    """The code a scanner just read, on its way to the product it belongs to."""
+
+    # Long enough to be a real code (EAN-8 is the shortest in use), short enough to be one.
+    # Letters allowed: some wholesalers print Code 39 labels with a prefix.
+    barcode: str = Field(min_length=6, max_length=32, pattern=r"^[A-Za-z0-9\-]+$")
+
+
 class AdjustIn(BaseModel):
     change_quantity: int
     # sales_upload and order_received are written by the system, never by a person.
