@@ -74,3 +74,57 @@ class InventoryReportOut(BaseModel):
 
     trend: list[TrendPointOut]
     items: list[InventoryLineOut]
+
+
+class ForecastLineOut(BaseModel):
+    """
+    One product as the demand model sees it. Spec 7.2.
+
+    Every figure here is computed in app/ml/forecast.py, which holds no database
+    code at all -- so the rule that decides a run-out date is unit tested, and the
+    app renders a number rather than deriving one.
+    """
+
+    stock_item_id: str
+    catalog_product_id: str
+    name: str
+    pack_size: str
+
+    # Units a day, weighted towards recent weeks.
+    units_per_day: float
+    trend: str                          # "rising" | "steady" | "falling"
+    units_sold: int
+    days_selling: int
+
+    quantity_on_hand: int
+    # Null where the product is not moving, rather than a date that never arrives.
+    days_of_cover: float | None
+    runs_out_on: str | None
+    is_urgent: bool
+
+    low_threshold: int
+    suggested_threshold: int | None
+    # True when the level the shop set is far enough from the sales to be worth saying.
+    threshold_looks_wrong: bool
+
+
+class ForecastReportOut(BaseModel):
+    """
+    Spec 7.2. What the shop is about to run out of, and how much to believe it.
+
+    `confidence` and `weeks_until_good` are the honest half of this report and are
+    not decoration: a forecast from ten days of sales is a different thing from
+    one from ten weeks, and the screen says which it is holding. `has_enough`
+    false means the model declined to answer, and `products` is then empty.
+    """
+
+    generated_on: str
+    has_enough: bool
+    days_counted: int
+    weeks_counted: int
+    confidence: str                     # "rough" | "fair" | "good"
+    # 0 once there is enough history for the spec's own bar of eight weeks.
+    weeks_until_good: int
+    # What the screen needs to explain an empty report without hardcoding the rule.
+    min_days_needed: int
+    products: list[ForecastLineOut]

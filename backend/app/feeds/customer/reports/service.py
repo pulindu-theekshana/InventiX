@@ -10,7 +10,10 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 
 from ....domain import stock
+from ....ml import forecast
 from .schemas import (
+    ForecastLineOut,
+    ForecastReportOut,
     InventoryLineOut,
     InventoryReportOut,
     ReportSectionOut,
@@ -64,10 +67,15 @@ def list_sections(db, customer_id: str) -> list[ReportSectionOut]:
     Returns the sections, each marked with whether this shop has the data for it
     yet. Two cheap counts rather than five queries: every section depends on
     either sales history or completed orders.
+
+    Sales history means a row in sales_records, not an applied upload. It used to
+    mean the upload, which was true until the till existed and silently wrong
+    afterwards: a shop billing every sale through the POS has no uploads at all,
+    and was told it had no sales history while its own reports sat on hundreds of
+    rows. The table that the reports actually read is the one to ask.
     """
     has_sales = bool(
-        db.table("sales_uploads").select("id")
-        .eq("customer_id", customer_id).eq("status", "applied").limit(1).execute().data
+        db.table("sales_records").select("id").limit(1).execute().data
     )
     has_orders = bool(
         db.table("orders").select("id")
@@ -224,3 +232,132 @@ def _trend(db, item_ids: list[str], total_now: int, days: int) -> list[TrendPoin
 
     points.reverse()
     return points
+
+
+# Ninety days is as far back as a forecast looks. Further would weight a season
+# the shop is no longer in, and the exponential weighting in ml/forecast.py has
+# already reduced anything that old to a rounding error.
+FORECAST_WINDOW_DAYS = 90
+
+
+def forecast_report(db, customer_id: str) -> ForecastReportOut:
+    """
+    Spec 7.2. What the shop is about to run out of.
+
+    Computed on request rather than read from a stored prediction, which is a
+    deliberate departure from spec 7.2's "computed on a schedule and stored".
+    The spec's reason for storing is that a screen must never trigger training,
+    and this model does no training: it is a weighted mean over at most ninety
+    days of one shop's rows, which is three queries and a loop. Storing it would
+    add a table, a migration and a staleness question to save a few milliseconds.
+
+    ponytail: computed live, move to ml/storage.py and the forecast_recalc job
+    when a model lands that is slow enough to notice -- a weekday effect or a
+    per-product fit, both of which are named in ml/forecast.py.
+
+    Sales rows are scoped by row level security rather than by a where clause,
+    because sales_records has no owner column -- ownership is reached through its
+    upload or its till sale (policy sales_records_own, migration 0032).
+    """
+    items = (
+        db.table("stock_items").select(STOCK_SELECT)
+        .eq("owner_id", customer_id).execute().data or []
+    )
+
+    start = datetime.now(UTC).date() - timedelta(days=FORECAST_WINDOW_DAYS)
+    sales = (
+        db.table("sales_records").select("catalog_product_id, quantity_sold, sale_date")
+        .gte("sale_date", start.isoformat()).execute().data or []
+    )
+
+    # Keyed by catalog product: stock_items is unique on (owner_id,
+    # catalog_product_id), so one shop has at most one shelf row per product.
+    shelf = {
+        row["product_catalog"]["id"]: {
+            "name": row["product_catalog"]["name"],
+            "quantity_on_hand": row["quantity_on_hand"],
+            "low_threshold": row["low_threshold"],
+        }
+        for row in items
+    }
+    stock_item_ids = {row["product_catalog"]["id"]: row["id"] for row in items}
+    pack_sizes = {row["product_catalog"]["id"]: row["product_catalog"]["pack_size"] for row in items}
+
+    result = forecast.forecast(sales, shelf, _lead_times(db, items))
+
+    return ForecastReportOut(
+        generated_on=str(result.generated_on),
+        has_enough=forecast.has_enough(sales),
+        days_counted=result.days_counted,
+        weeks_counted=result.weeks_counted,
+        confidence=result.confidence,
+        weeks_until_good=result.weeks_until_good,
+        min_days_needed=forecast.MIN_DAYS_OF_HISTORY,
+        # Empty rather than a list of zeros when the model declined: a screen
+        # showing "not enough data yet" must not also show a table under it.
+        products=[
+            ForecastLineOut(
+                stock_item_id=stock_item_ids[p.catalog_product_id],
+                catalog_product_id=p.catalog_product_id,
+                name=p.name,
+                pack_size=pack_sizes.get(p.catalog_product_id, ""),
+                units_per_day=p.units_per_day,
+                trend=p.trend,
+                units_sold=p.units_sold,
+                days_selling=p.days_selling,
+                quantity_on_hand=p.quantity_on_hand or 0,
+                days_of_cover=p.days_of_cover,
+                runs_out_on=str(p.runs_out_on) if p.runs_out_on else None,
+                is_urgent=p.is_urgent,
+                low_threshold=p.low_threshold or 0,
+                suggested_threshold=p.suggested_threshold,
+                threshold_looks_wrong=p.threshold_looks_wrong,
+            )
+            for p in result.products
+        ] if forecast.has_enough(sales) else [],
+    )
+
+
+def _lead_times(db, items: list[dict]) -> dict[str, int]:
+    """
+    How long the preferred supplier actually takes, per product, for the reorder
+    point to cover the wait rather than assuming instant delivery.
+
+    Measured first, stated second. Spec 12.1 is explicit that a supplier's own
+    lead_time_days is a claim; supplier_ranking.measured_delivery_days is what
+    past orders show. The claim is the fallback for a supplier nobody has ordered
+    from yet, which is better than treating the wait as zero.
+    """
+    pairs = {
+        (r["preferred_supplier_id"], r["product_catalog"]["id"])
+        for r in items
+        if r.get("preferred_supplier_id")
+    }
+    if not pairs:
+        return {}
+
+    supplier_ids = list({s for s, _ in pairs})
+    listings = (
+        db.table("supplier_listings")
+        .select("supplier_id, catalog_product_id, lead_time_days")
+        .in_("supplier_id", supplier_ids)
+        .in_("catalog_product_id", list({p for _, p in pairs}))
+        .execute().data or []
+    )
+    measured = {
+        row["supplier_id"]: row.get("measured_delivery_days")
+        for row in (
+            db.table("supplier_ranking").select("supplier_id, measured_delivery_days")
+            .in_("supplier_id", supplier_ids).execute().data or []
+        )
+    }
+
+    stated = {(l["supplier_id"], l["catalog_product_id"]): l["lead_time_days"] for l in listings}
+    out: dict[str, int] = {}
+    for supplier_id, product_id in pairs:
+        days = measured.get(supplier_id)
+        if days is None:
+            days = stated.get((supplier_id, product_id))
+        if days is not None:
+            out[product_id] = max(0, round(days))
+    return out

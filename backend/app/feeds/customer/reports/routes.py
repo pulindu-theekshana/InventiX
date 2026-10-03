@@ -10,7 +10,7 @@ from fastapi import APIRouter, Query
 
 from ....dependencies import CustomerDep
 from . import service
-from .schemas import InventoryReportOut, ReportSectionOut
+from .schemas import ForecastReportOut, InventoryReportOut, ReportSectionOut
 
 router = APIRouter(prefix="/customer/reports", tags=["customer: reports"])
 
@@ -35,3 +35,16 @@ def inventory_report(
     staleness to explain -- pressing Generate always shows the shelf as it is now.
     """
     return service.inventory_report(user.db, user.id, days)
+
+
+@router.get("/forecast", response_model=ForecastReportOut)
+def forecast_report(user: CustomerDep) -> ForecastReportOut:
+    """
+    Spec 7.2. What is about to run out, and how much of that to believe.
+
+    An owner endpoint, not a till one: sales history is the most sensitive data a
+    shop has (spec 15.1), and a cashier has no reason to read turnover. The same
+    rule is in the row level security policy behind it, so hiding the screen is
+    not what enforces it.
+    """
+    return service.forecast_report(user.db, user.shop_id)

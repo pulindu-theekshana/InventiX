@@ -21,6 +21,18 @@ import logging
 log = logging.getLogger(__name__)
 
 
+def is_worth_storing() -> bool:
+    """
+    Whether a prediction is expensive enough to be worth a table.
+
+    False while the demand model is a weighted mean the reports feed computes on
+    request (ml/forecast.py). It turns True with the first model that has to be
+    fitted rather than counted -- at which point this file gains a table and
+    jobs/forecast_recalc.py starts doing its weekly work without changing.
+    """
+    return False
+
+
 def refresh_all() -> int:
     """Recomputes and stores every prediction. Returns how many were written."""
     log.info("ml storage: nothing to refresh, models are phase 10 (spec 7.2)")
