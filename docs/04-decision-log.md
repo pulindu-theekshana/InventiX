@@ -260,3 +260,229 @@ runtime can do). Sending base64 in JSON (rejected: changes the endpoint's contra
 payload by a third).
 
 **Affects.** Spec §6.6. `frontend/src/api/uploads.ts`, `frontend/src/api/client.ts`.
+
+
+## D-015 — The till generates its own receipt number, with a device prefix
+
+**Decision.** A POS bill carries `receipt_no` in the form `T1-000147`: a device prefix chosen per
+till, then a counter the till increments itself. Unique per shop in the database
+(`pos_sales.pos_sale_receipt_is_unique_per_shop`).
+
+**Reason.** A till has to keep billing with no internet, so it cannot ask the server for the next
+number. Two tills counting independently would both reach 000147; the prefix is what keeps them
+apart. A customer returning goods quotes this number, so it has to be short enough to read aloud.
+
+**Alternatives.** A server-assigned number (rejected: impossible offline). The internal uuid alone
+(rejected: nobody can read it over a counter). A timestamp (rejected: long, and two sales in the
+same second collide).
+
+**Affects.** Spec §6.6. `database/migrations/0026_pos_sales.sql`, `backend/app/domain/pos.py`.
+
+
+## D-016 — A till sale is recorded, never refused over stock arithmetic
+
+**Decision.** `record_sale` stores the bill as sent. If the quantity sold exceeds what the shop is
+recorded as holding, the bill keeps the real quantity and the stock movement is clamped at zero. A
+product with no stock row is sold and recorded, moving no stock. A stock id belonging to another
+shop **is** refused.
+
+**Reason.** The customer has paid and left. The sale is a record of something that happened, not a
+request for permission, and a till that argues with the cashier about a miscount is a till nobody
+uses. The same clamp already exists for sales uploads. Writing to another shop's stock is not a
+counting error, so that one is still refused.
+
+**Alternatives.** Refusing the sale (rejected: blocks the counter over bookkeeping). Allowing
+negative stock (rejected: every screen would have to explain a negative, and the figure would still
+be wrong).
+
+**Affects.** Spec §6.6. `backend/app/domain/pos.py`, `backend/app/feeds/customer/pos/service.py`.
+
+
+## D-017 — The backend totals the bill, and a resent bill is stored once
+
+**Decision.** The till sends lines; the backend computes line totals, the discount and the bill
+total. Each bill carries a `client_sale_id`, unique per shop, and a repeat send returns the stored
+sale instead of creating a second one.
+
+**Reason.** A client that can name its own total can under-report takings, and a till on a bad
+connection cannot tell a timeout from a failure — so it must be safe to send again. This is the
+guarantee orders already have through `idempotency_key`, enforced by a unique constraint rather
+than by remembering to check.
+
+**Affects.** Spec §6.6 and §15.2. `database/migrations/0026_pos_sales.sql`,
+`backend/app/feeds/customer/pos/service.py`.
+
+
+## D-018 — The POS lives inside the existing app, not in a project of its own
+
+**Decision.** The till screens are a route group, `frontend/app/(pos)/`, beside `(customer)` and
+`(supplier)`. It is delivered to a shop laptop as the web build, installed from Chrome as a PWA.
+
+**Reason.** The till needs the catalog, the API client, login, the theme and the types that already
+exist. A second project means either copying them, which drifts, or npm workspaces, which is
+tooling work before a single sale has been rung up. A route group also keeps a backend change and
+the till change that depends on it in one commit.
+
+**Alternatives.** `Project/pos/` with a shared package (rejected for now: the abstraction would be
+designed on guesses about what the till needs; revisit if the POS becomes a product of its own). A
+packaged desktop app from the start (rejected: only needed for cash-drawer control).
+
+**Affects.** `frontend/app/(pos)/`, `docs/16-pos-system.md`.
+
+
+## D-019 — A till sale is stored on the device first, and sent afterwards
+
+**Decision.** `src/pos/queue.ts` keeps an outbox in AsyncStorage. Finishing a bill writes it to the
+device and returns; sending happens in the background and retries every 20 seconds while anything
+is waiting. A 4xx refusal (except 401, 408 and 429) marks the bill `stuck` instead of retrying it,
+and a stuck bill is only removed when the owner discards it.
+
+**Reason.** Billing must not wait for a network a shop may not have. Separating "the backend
+refused this" from "the backend could not be reached" is what stops a wrong bill being retried
+forever and a right bill being thrown away. Nothing is deleted automatically, because takings that
+vanish quietly are worse than a queue with an awkward row in it.
+
+**Alternatives.** Sending synchronously and showing a spinner (rejected: the counter stops when the
+WiFi does). SQLite from the start (deferred: AsyncStorage is enough for a day of bills, and the one
+module means swapping it changes no screen). A network listener (rejected: another dependency, and
+a failed request is cheap).
+
+**Affects.** Spec §6.6. `frontend/src/pos/queue.ts`, `frontend/src/pos/device.ts`,
+`frontend/src/hooks/usePosQueue.ts`.
+
+
+## D-020 — The till is guarded by limits and attribution, not by approval for everything
+
+**Decision.** A cashier starts a shift with a PIN and every bill carries their name. A discount or
+a refund above a limit the owner sets needs the owner's PIN, as does leaving the till or opening
+till settings. Day close lists every discount and return with the cashier's name. PINs are SHA-256
+hashes salted with the shop id, computed on the device and stored in `pos_settings`.
+
+**Reason.** Asking the owner to approve every discount makes staff stop using the till properly,
+so the guard is a limit with sensible defaults, and zero means "ask me every time" for shops that
+want it. The cheaper half is detection: a list the owner glances at while counting the drawer
+changes behaviour without interrupting anyone.
+
+**Alternatives.** A separate cashier account (deferred to the next phase: it is the only real data
+boundary, and it touches login, roles and RLS). PIN on the device only (rejected: clearing browser
+storage would remove every lock). Approval from the owner's phone (rejected: it fails exactly when
+the till is offline).
+
+**Known limit, stated rather than hidden.** This locks screens, not data. The cashier holds the
+owner's token, so the API is still reachable, and a four digit PIN is brute-forceable from its
+hash.
+
+**Affects.** Spec §6.6. `database/migrations/0028_pos_settings.sql`,
+`backend/app/feeds/customer/pos/`, `frontend/src/pos/{pin,settings,shift}.ts`,
+`frontend/app/pos/{shift,settings}.tsx`, `frontend/src/components/OwnerPin.tsx`.
+
+
+## D-021 — A receipt number already in use is a conflict the till recovers from
+
+**Decision.** `record_sale` turns the unique-violation on `(owner_id, receipt_no)` into a 409 with
+code `receipt_taken` instead of letting it become a 500. The till asks `GET /customer/pos/
+next-receipt` when it opens and moves its counter forward if the shop is further along, and a
+queued bill that comes back `receipt_taken` is renumbered and sent again rather than retried or
+dropped.
+
+**Reason.** The counter lives on the device so a bill can be numbered offline, and that means
+clearing the browser's data sends it back to 1 — every bill then collides with one already stored.
+Three real sales sat unsent for ever behind a 500 the till could only read as "try later", and
+because an unhandled 500 carries no CORS headers, the browser reported it as a CORS error, which
+sent the search in the wrong direction entirely.
+
+**Alternatives.** Server-assigned numbers (rejected: impossible offline, which is the whole point
+of the till). Dropping a clashing bill (rejected: that is real money). Leaving it `stuck` for the
+owner to sort out by hand (rejected: it is recoverable without them).
+
+**Affects.** Spec §6.6. `backend/app/feeds/customer/pos/{service,routes}.py`,
+`frontend/src/pos/{device,queue}.ts`.
+
+
+## D-022 - A cashier is an account, not a name on a list
+
+**Decision.** `profiles.role` gains `'cashier'` and an `employer_id` naming the shop. The owner
+creates the login from till settings; the backend answers one question in one place
+(`CurrentUser.shop_id`), the database answers the same one (`app_shop_id()`), and the only routes a
+cashier may reach are the till's own plus `GET /customer/stocks`, which the till searches to build
+a bill. `pos_sales.cashier_id` and the name on a bill are stamped from the token, and the till's
+`cashier_label` is ignored.
+
+**Reason.** Phase 5 locked screens: the account at the counter was still the owner's, so the name
+on a bill was worth exactly as much as the honesty of whoever typed a four digit PIN, and the token
+in that browser could reach every endpoint the owner could. An owner asking "who did this" needs an
+answer that survives being disputed, and that answer has to come from something the till cannot
+choose.
+
+**Alternatives.** Keeping the PIN list (rejected: it is the weakest version of identity, and
+running it beside accounts gives two answers that can disagree). One shared cashier login per shop
+(rejected: it names a role, not a person, which is the problem again). Enforcing the discount limit
+on the server (deferred: the server cannot verify an approval typed on a device, and doing it
+properly means the owner approving from their phone, which fails exactly when the till is offline).
+
+**Known limits, stated rather than hidden.** A cashier can read the shop's stock list, because the
+till searches it, and with it the catalog and the listing prices every signed-in user may read. The owner's PIN hash is readable by a signed-in cashier, because approval must
+work offline. Limits are still a guard on the device. A forgotten cashier password means a new
+login.
+
+**Affects.** Spec 6.6 and 15.2. `database/migrations/0029_cashier_accounts.sql`,
+`database/policies/{profiles,stock_items}.sql`, `database/functions/apply_stock_adjustment.sql`,
+`backend/app/dependencies.py`, `backend/app/feeds/customer/pos/`,
+`backend/app/feeds/customer/stocks/routes.py`, `frontend/app/pos/`,
+`frontend/src/pos/settings.ts`, `frontend/src/hooks/useAuth.ts`, `frontend/src/stores/authStore.ts`.
+Removed `frontend/app/pos/shift.tsx` and `frontend/src/pos/shift.ts`.
+
+
+## D-023 - The owner reads the counter from Reports, not from the till
+
+**Decision.** `GET /customer/pos/activity` takes a date range and returns takings per cashier plus
+every discount and every return, each with the account that was signed in. It is owner-only
+(`require_customer`) and reached from Reports, so it works from the owner's phone. Day close keeps
+its job: one till, one day, does the drawer match.
+
+**Reason.** Phase 6 made the name on a bill trustworthy; without something that reads it, that is a
+column nobody looks at. The question an owner actually asks -- "who did this, and is any of it
+odd" -- is not the question day close answers, and answering it should not require standing at the
+counter after closing.
+
+**Alternatives.** Extending day close to a range (rejected: it is the cashier's screen, and the
+cashier is the person this is partly about). A report file to generate (rejected: this is a thing
+to glance at, not to produce). Grouping in SQL with a view (rejected for now: a month of a small
+shop's bills is hundreds of rows, and PostgREST cannot group without one -- the 31 day cap is what
+keeps that honest).
+
+**Known limit.** Flagging is detection, not prevention: a bill above the limit is listed, not
+stopped. Enforcing the limit server-side needs an approval the server can verify, which the
+offline till cannot give it today.
+
+**Affects.** Spec 6.6 and 7. `backend/app/feeds/customer/pos/{schemas,service,routes}.py`,
+`frontend/app/(customer)/reports/{till.tsx,index.tsx,_layout.tsx}`, `frontend/src/api/pos.ts`.
+
+
+## D-024 - The till is installed, not packaged
+
+**Decision.** The counter runs the exported web build, installed from Chrome as a PWA: a manifest,
+an app icon, its own window, and a service worker that keeps the app's files so it opens with no
+connection. Receipts are markup printed through the browser. A packaged `.exe` (Tauri) is written
+up but not built.
+
+**Reason.** Everything a small shop needs from a till -- a window with no address bar, a desktop
+icon, offline start, a printed slip -- the browser already does. An `.exe` adds a Rust toolchain on
+the build machine and a file to redistribute for every fix, in exchange for a cash drawer kick and
+sturdier storage, neither of which this shop has asked for yet.
+
+**Alternatives.** Tauri now (deferred: see the phase 8 section for exactly what it buys and the
+order to build it in). Static output with `+html.tsx` (rejected: it pre-renders in Node and
+`window is not defined` crashes the build; the HTML template lives in `public/index.html`
+instead). `skipWaiting` on the service worker, the usual advice (rejected: a new build taking over
+while a customer is mid-bill is a lost bill -- the cashier is asked instead).
+
+**Known limits.** A service worker needs https or localhost, so the offline shell wants the till
+served from the laptop it runs on. The shell caches the app, not the catalog. Chrome shows a print
+dialog per bill unless the shop starts it with `--kiosk-printing`. Registration itself is the one
+thing that could not be verified here: this browser refuses to register a worker, so the install
+icon appearing in Chrome is the real check.
+
+**Affects.** Spec 6.6. `frontend/public/{index.html,manifest.webmanifest,sw.js}`,
+`frontend/src/pos/receipt.ts`, `frontend/src/components/UpdateReady.tsx`,
+`frontend/app/pos/{index,returns}.tsx`, `frontend/package.json`.

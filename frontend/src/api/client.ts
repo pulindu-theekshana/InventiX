@@ -22,6 +22,9 @@ export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
  */
 export const useMockData = !API_BASE_URL;
 
+/** Long enough for a slow phone network, short enough that a hung request is noticed. */
+const REQUEST_TIMEOUT_MS = 20_000;
+
 /** Lets a screen show "showing sample data" rather than pretending the numbers are real. */
 export const MOCK_NOTICE = 'Sample data — the backend is not connected yet.';
 
@@ -32,21 +35,40 @@ async function authHeader(): Promise<Record<string, string>> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}, retried = false): Promise<T> {
   /**
    * A file upload sends FormData, which writes its own multipart content type with a
    * boundary. Forcing application/json here made the backend reject every upload.
    */
   const isForm = typeof FormData !== 'undefined' && init.body instanceof FormData;
 
+  /**
+   * A request that never answers is worse than one that fails: the till's send queue waits on it
+   * for ever and stops retrying, so sales sit on the laptop while the shop believes they are
+   * sent. A dropped WiFi or a backend restarting mid-request does exactly that.
+   */
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
+    signal: init.signal ?? timeout,
     headers: {
       ...(isForm ? {} : { 'Content-Type': 'application/json' }),
       ...(await authHeader()),
       ...init.headers,
     },
   });
+
+  /**
+   * A screen can mount while the session is still being written -- the first request after
+   * signing in went out with no token and came back 401, and only a reload fixed it. One retry
+   * with a freshly read session covers that, and an expired token being renewed behind us.
+   * Once, never in a loop: a real 401 must still reach the screen and say "sign in again".
+   */
+  if (response.status === 401 && !retried && supabase) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.access_token) return request<T>(path, init, true);
+  }
 
   if (!response.ok) {
     /** Keep the backend's own message when it sends one — it is written for the shop owner. */

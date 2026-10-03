@@ -6,9 +6,10 @@
  * Look here when : A tab is missing or in the wrong order.
  */
 
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { TAB_ICON_SIZE, useTabScreenOptions } from '../../src/hooks/useTabScreenOptions';
+import { useAuth } from '../../src/hooks/useAuth';
 
 /** The restock flow: no tab bar to wander off into mid-order. Its stack draws the header. */
 const FOCUSED = {
@@ -18,6 +19,14 @@ const FOCUSED = {
 
 export default function CustomerLayout() {
   const screenOptions = useTabScreenOptions();
+  const { isCashier } = useAuth();
+
+  /**
+   * A cashier typing one of these addresses into the browser would reach a screen whose every
+   * request is refused, which reads like a broken app rather than a boundary. The backend and
+   * the policies are what enforce it; this is so it looks deliberate.
+   */
+  if (isCashier) return <Redirect href="/pos" />;
 
   return (
     <Tabs screenOptions={screenOptions}>

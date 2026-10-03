@@ -7,7 +7,7 @@
  */
 
 import type { OrderStatus } from './orderStatus';
-import type { CatalogProduct, Role } from './database';
+import type { AccountRole, CatalogProduct, Role } from './database';
 
 /** Spec 6.2 — three states, matching the three pie segments exactly. */
 export type StockStatus = 'in_stock' | 'low_stock' | 'restock_requested';
@@ -163,11 +163,22 @@ export interface RestockDraft {
 
 export interface AuthProfile {
   id: string;
-  role: Role;
+  role: AccountRole;
   business_name: string;
   contact_person: string;
   email: string;
   phone: string;
+  /** The shop a cashier works for. Null for an owner, who is their own shop. */
+  employer_id: string | null;
+}
+
+/** One of the shop's staff logins. The PIN-only cashier of phase 5 is gone. */
+export interface CashierAccount {
+  id: string;
+  name: string;
+  /** Made by the backend, because a shop assistant may have no email address. */
+  login_email: string;
+  is_active: boolean;
 }
 
 /** Spec 7.1 — the five reports that need no machine learning. */
@@ -214,4 +225,135 @@ export interface InventoryReport {
   at_zero: number;
   trend: TrendPoint[];
   items: InventoryLine[];
+}
+
+/* ---------------------------------------------------------------- the till (spec 6.6) */
+
+export interface Cashier {
+  name: string;
+  /** SHA-256 of the PIN, salted with the shop id. The number itself never leaves the device. */
+  pin_hash: string;
+}
+
+/** Who may use the till, and what needs the owner. One set per shop. */
+export interface PosSettings {
+  owner_pin_hash: string | null;
+  /** A discount at or below this goes through; above it the owner is asked. 0 = always ask. */
+  discount_limit: number;
+  return_limit: number;
+  cashiers: Cashier[];
+}
+
+export interface SaleLinePayload {
+  catalog_product_id: string;
+  /** Null when the shop does not track the product in Stocks. The sale is still recorded. */
+  stock_item_id: string | null;
+  /** Decimal: rice and dhal are sold by weight. */
+  quantity: number;
+  unit_price: number;
+  /** The shop had no price, so the cashier typed one. The owner sees it in the till view. */
+  price_from_till?: boolean;
+}
+
+/** What the till sends. Written to the device first, then sent — see src/pos/queue.ts. */
+export interface SalePayload {
+  /** The till's own id for this bill. Resending the same one stores the sale once. */
+  client_sale_id: string;
+  /** 'T1-000147'. Made by the till, because an offline till cannot ask the server. */
+  receipt_no: string;
+  device_id: string;
+  sold_at: string;
+  payment_method: 'cash' | 'card' | 'other';
+  discount: number;
+  cashier_label: string | null;
+  lines: SaleLinePayload[];
+}
+
+/** Goods coming back. Prices are taken from the original bill by the backend, never sent. */
+export interface ReturnPayload {
+  client_sale_id: string;
+  receipt_no: string;
+  device_id: string;
+  returns_receipt_no: string;
+  sold_at: string;
+  cashier_label: string | null;
+  reason: string | null;
+  lines: { catalog_product_id: string; quantity: number }[];
+}
+
+export interface SaleLine {
+  catalog_product_id: string;
+  stock_item_id: string | null;
+  name: string;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+  returned_quantity: number;
+  price_from_till?: boolean;
+}
+
+export interface Sale {
+  id: string;
+  receipt_no: string;
+  kind: 'sale' | 'return';
+  sold_at: string;
+  payment_method: string;
+  discount: number;
+  total: number;
+  cashier_label: string | null;
+  lines: SaleLine[];
+}
+
+/** What the drawer should hold at closing time. Cash only — a card payment never reached it. */
+export interface CashierTotal {
+  cashier: string | null;
+  bills: number;
+  sales_total: number;
+}
+
+/** One thing on a bill the owner might ask about: a discount, or goods coming back. */
+export interface TillEvent {
+  receipt_no: string;
+  kind: 'sale' | 'return';
+  sold_at: string;
+  cashier: string | null;
+  cashier_id: string | null;
+  total: number;
+  discount: number;
+  /** Above the shop's own limit, so the owner should have been asked. */
+  above_limit: boolean;
+  /** A line was priced by the cashier because the shop had none for it. */
+  priced_at_till?: boolean;
+}
+
+export interface TillCashier {
+  cashier_id: string | null;
+  cashier: string | null;
+  bills: number;
+  sales_total: number;
+  discounts_total: number;
+  returns_total: number;
+}
+
+/** The owner's view of the counter, over a range rather than one day. */
+export interface TillActivity {
+  from_date: string;
+  to_date: string;
+  bills: number;
+  sales_total: number;
+  returns_total: number;
+  discounts_total: number;
+  by_cashier: TillCashier[];
+  events: TillEvent[];
+}
+
+export interface DaySummary {
+  date: string;
+  bills: number;
+  sales_total: number;
+  returns_total: number;
+  cash_expected: number;
+  card_total: number;
+  other_total: number;
+  by_cashier: CashierTotal[];
 }

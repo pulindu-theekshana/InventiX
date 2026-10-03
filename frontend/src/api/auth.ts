@@ -36,6 +36,7 @@ export async function createProfile(input: ProfileSetupInput): Promise<AuthProfi
       contact_person: input.contact_person,
       email: 'demo@inventix.lk',
       phone: input.phone,
+      employer_id: null,
     });
   }
   return request('/auth/profile', { method: 'POST', body: JSON.stringify(input) });

@@ -53,7 +53,12 @@ export function StockStatusChart({ summary, selected, onSelect }: Props) {
       <View style={styles.body}>
         <View style={styles.chartWrap}>
           <Svg width={SIZE} height={SIZE}>
-            <G rotation={-90} originX={SIZE / 2} originY={SIZE / 2}>
+            {/*
+              A plain SVG rotate, not react-native-svg's rotation/originX/originY: on web those
+              render as a `transform-origin` DOM attribute React does not accept, and every
+              Stocks render logged a warning. One string works on both web and the phone.
+            */}
+            <G transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}>
               <Circle
                 cx={SIZE / 2}
                 cy={SIZE / 2}

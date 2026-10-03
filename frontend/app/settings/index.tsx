@@ -43,6 +43,12 @@ export default function Settings() {
 
   const items = ITEMS.filter((item) => item.route !== '/settings/password' || viaGoogle === false);
 
+  // The till, for the people who stand at a counter: the shop owner and their cashiers. A
+  // supplier has no counter, so it is not offered to them. Spec 6.6 and docs/16-pos-system.md.
+  const menu = profile?.role === 'supplier'
+    ? items
+    : [{ icon: 'calculator-outline' as const, label: 'Open the till', route: '/pos' }, ...items];
+
   async function handleSignOut() {
     setBusy(true);
     await signOut();
@@ -67,7 +73,15 @@ export default function Settings() {
       <View style={styles.badges}>
         {profile ? (
           <Badge
-            label={profile.role === 'customer' ? 'Customer account' : 'Supplier account'}
+            label={
+              profile.role === 'customer'
+                ? 'Customer account'
+                : profile.role === 'supplier'
+                  ? 'Supplier account'
+                  : // A cashier reaching this screen by typing the address used to be told they
+                    // were a supplier, because the label only knew about two roles.
+                    'Till account'
+            }
             tone="neutral"
           />
         ) : null}
@@ -76,7 +90,7 @@ export default function Settings() {
       </View>
 
       <Card padded={false} style={styles.list}>
-        {items.map((item, i) => (
+        {menu.map((item, i) => (
           <View key={item.label}>
             <Card
               level={0}
@@ -87,7 +101,7 @@ export default function Settings() {
               <Text style={[text.body, styles.flex]}>{item.label}</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
             </Card>
-            {i < items.length - 1 ? <View style={styles.rule} /> : null}
+            {i < menu.length - 1 ? <View style={styles.rule} /> : null}
           </View>
         ))}
       </Card>

@@ -1,7 +1,7 @@
 """
 Shared route dependencies
 
-Purpose : get_current_user, require_customer, require_supplier. Every protected route depends on one of these. Role checks live here, not scattered in routes.
+Purpose : get_current_user, require_customer, require_supplier, require_till. Every protected route depends on one of these. Role checks live here, not scattered in routes.
 Spec    : Section 15.2
 Look here when : A user reaches an endpoint their role should not reach, or a valid user gets 401 or 403.
 """
@@ -27,8 +27,17 @@ class CurrentUser:
     id: str
     role: str
     business_name: str
+    contact_person: str
     email: str
     access_token: str
+    """The shop this call is about: the caller's own id, or their employer's if they are a
+    cashier. Services take this as the owner id, so one shop's data stays one shop's data
+    whichever of its people is signed in."""
+    shop_id: str
+
+    @property
+    def is_cashier(self) -> bool:
+        return self.role == "cashier"
 
     @property
     def db(self) -> Client:
@@ -63,7 +72,7 @@ def get_current_user(
     result = (
         service_client()
         .table("profiles")
-        .select("id, role, business_name, email, is_active")
+        .select("id, role, business_name, contact_person, email, is_active, employer_id")
         .eq("id", claims.user_id)
         .maybe_single()
         .execute()
@@ -83,8 +92,12 @@ def get_current_user(
         id=profile["id"],
         role=profile["role"],
         business_name=profile["business_name"],
+        contact_person=profile["contact_person"],
         email=profile["email"],
         access_token=token,
+        # A cashier acts on their employer's shop; everyone else is their own shop. Mirrors
+        # app_shop_id() in the database, so the policies and the services agree.
+        shop_id=profile.get("employer_id") or profile["id"],
     )
 
 
@@ -98,6 +111,19 @@ def require_customer(user: CurrentUserDep) -> CurrentUser:
     return user
 
 
+def require_till(user: CurrentUserDep) -> CurrentUser:
+    """
+    The counter: the shop owner, or one of their cashier accounts.
+
+    A cashier is deliberately refused everywhere else. Ordering, stock edits, reports and
+    supplier ratings are the owner's business, and the way to keep them that way is for the
+    till's routes to be the only ones that name this dependency (spec 15.2).
+    """
+    if user.role not in ("customer", "cashier"):
+        raise Forbidden("This is only available to shop accounts.")
+    return user
+
+
 def require_supplier(user: CurrentUserDep) -> CurrentUser:
     if user.role != "supplier":
         raise Forbidden("This is only available to supplier accounts.")
@@ -105,4 +131,5 @@ def require_supplier(user: CurrentUserDep) -> CurrentUser:
 
 
 CustomerDep = Annotated[CurrentUser, Depends(require_customer)]
+TillDep = Annotated[CurrentUser, Depends(require_till)]
 SupplierDep = Annotated[CurrentUser, Depends(require_supplier)]

@@ -9,6 +9,13 @@
 import type { OrderStatus } from './orderStatus';
 
 export type Role = 'customer' | 'supplier';
+
+/**
+ * What an account can be. A cashier is never chosen at sign-up -- the owner creates one from
+ * till settings (migration 0029) -- so it is deliberately not part of `Role`, which is the
+ * question the registration screens ask.
+ */
+export type AccountRole = Role | 'cashier';
 export type Channel = 'in_app' | 'whatsapp' | 'email';
 export type UploadStatus = 'pending' | 'needs_mapping' | 'applied' | 'failed';
 export type AdjustmentReason =
@@ -21,7 +28,9 @@ export type AdjustmentReason =
 /** Spec 5.1 */
 export interface Profile {
   id: string;
-  role: Role;
+  role: AccountRole;
+  /** The shop a cashier works for (migration 0029). Null for an owner or a supplier. */
+  employer_id?: string | null;
   business_name: string;
   contact_person: string;
   phone: string;

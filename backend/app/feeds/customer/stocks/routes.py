@@ -8,12 +8,13 @@ Look here when : A stocks endpoint 404s, returns the wrong status code, or rejec
 
 from fastapi import APIRouter, status
 
-from ....dependencies import CustomerDep
+from ....dependencies import CustomerDep, TillDep
 from . import service
 from .schemas import (
     AddStockItemIn,
     AdjustIn,
     AdjustmentOut,
+    BarcodeIn,
     SeasonalWarningOut,
     StockItemOut,
     StockSummaryOut,
@@ -23,9 +24,12 @@ from .schemas import (
 router = APIRouter(prefix="/customer/stocks", tags=["customer: stocks"])
 
 
+# TillDep, not CustomerDep: the till searches this list to build a bill, so a cashier account
+# has to be able to read it. user.shop_id is the owner either way. Every other route here edits
+# stock or reads its history, which stays the owner's.
 @router.get("", response_model=list[StockItemOut])
-def list_stocks(user: CustomerDep) -> list[StockItemOut]:
-    return service.list_stocks(user.db, user.id)
+def list_stocks(user: TillDep) -> list[StockItemOut]:
+    return service.list_stocks(user.db, user.shop_id)
 
 
 @router.get("/summary", response_model=StockSummaryOut)
@@ -59,6 +63,13 @@ def update_stock_item(
     stock_item_id: str, body: UpdateStockItemIn, user: CustomerDep
 ) -> None:
     service.update(user.db, user.id, stock_item_id, body)
+
+
+# TillDep: this is a cashier's job, done at the counter while the item is in their hand.
+@router.post("/{stock_item_id}/barcode", status_code=status.HTTP_204_NO_CONTENT)
+def save_barcode(stock_item_id: str, body: BarcodeIn, user: TillDep) -> None:
+    """Teaches the shop a barcode it did not know, by saying which product it is."""
+    service.save_barcode(user.db, user.shop_id, stock_item_id, body.barcode)
 
 
 @router.post("/{stock_item_id}/adjust", status_code=status.HTTP_204_NO_CONTENT)

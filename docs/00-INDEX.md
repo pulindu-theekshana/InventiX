@@ -12,6 +12,37 @@
 | `08-api-contract.md` | Every endpoint the backend must provide, what it receives and returns, and the rule it enforces. Derived from the frontend, which was built first. | You add, remove or change the shape of an endpoint. |
 | `09-database-build.md` | How the Supabase database is created, in what order, the row level security policies, and the queries the backend runs. | You add a migration, change a policy, or add an index. |
 | `10-connections.md` | How the app, the backend and the database actually talk to each other: the three edges, the two keys, and a traced request through all of them. | You change how a layer reaches another, or move a read between the direct and backend paths. |
+| `16-pos-system.md` | The till: what it is, how it reaches the same backend the app uses, and the decisions behind each phase. | You build another phase of the POS, or change how a sale is recorded. |
+| `17-what-the-pos-changed.md` | Every file that already existed and had to change for the till, and why. Written for a reviewer. | You change something outside `pos/` for the till's sake. |
+
+## How this folder is arranged
+
+Markdown here, PDFs in `handouts/`. The PDFs are the ones that get sent to somebody — a supervisor,
+a teammate setting the project up, a supplier — and several are a printed copy of the markdown
+beside them (`08`, `09`, `10`). Keeping them in one list made the folder look twice as long as it
+is.
+
+The numbers have gaps (`11`–`13`, `15`) because those documents only ever existed as handouts, or
+were retired. Numbers are never reused and never renumbered: file headers all through `backend/`
+and `frontend/` point at these names, and a tidy-looking sequence is not worth breaking them.
+
+| Handout | What it is |
+|---|---|
+| `handouts/08-api-contract.pdf`, `09-database-build.pdf`, `10-connections.pdf` | Printed copies of the markdown of the same number |
+| `handouts/11-integration-plan.pdf` | How the three parts were joined up |
+| `handouts/12-supplier-handover.pdf` | For the teammate who took the supplier feed |
+| `handouts/15-network-change.pdf` | How to point the app at a new laptop address |
+| `handouts/backend-build-report.pdf`, `database-build-report.pdf`, `frontend-build-record.pdf` | What was built in each part, for the project report |
+
+## Who each document is for
+
+Everything in this folder is written **for people**: teammates, a supervisor, or whoever picks the
+project up next. Nothing here is addressed to a tool.
+
+The notes written **for an AI assistant** — conventions it must follow and the traps already hit —
+live in `CLAUDE.md` at the root of the repository, which is also where the assistant looks for them
+by default. They were in this folder until 3 October 2026 and the two kinds of writing kept getting
+confused with each other.
 
 ## The maintenance rule
 

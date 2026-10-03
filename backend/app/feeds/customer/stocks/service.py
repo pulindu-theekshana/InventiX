@@ -9,6 +9,7 @@ Look here when : The wrong items appear in a section, or the pie chart numbers a
 from datetime import date
 
 from ....core.exceptions import Conflict, NotFound
+from ....core.supabase import service_client
 from ....domain import seasonal, stock, thresholds
 from .schemas import (
     AddStockItemIn,
@@ -178,6 +179,45 @@ def update(db, owner_id: str, stock_item_id: str, data: UpdateStockItemIn) -> No
     db.table("stock_items").update(patch).eq("id", stock_item_id).eq("owner_id", owner_id).execute()
 
 
+def save_barcode(db, owner_id: str, stock_item_id: str, barcode: str) -> None:
+    """
+    Attaches the code a scanner just read to the product the cashier picked.
+
+    The shop builds its barcode list by selling: scan an unknown code once, say what it is, and
+    every scan after that finds it. Nobody types EAN numbers into a form, which is why the
+    catalog shipped with none.
+
+    Written to product_catalog rather than to this shop's row, because a barcode is a property of
+    the product itself -- the same packet of milk powder carries the same number in every shop.
+    That is also why it is only ever filled in, never overwritten: one shop scanning the wrong
+    item must not rename a code the rest are already using.
+    """
+    item = get_one(db, owner_id, stock_item_id)  # 404s if it is not theirs
+    code = barcode.strip().upper()
+
+    clash = (
+        service_client().table("product_catalog").select("id, name, barcode")
+        .eq("barcode", code).maybe_single().execute()
+    )
+    if clash and clash.data:
+        if clash.data["id"] == item.product.id:
+            return  # already saved, and saying so would be a failure that is not one
+        raise Conflict(f"That barcode already belongs to {clash.data['name']}.")
+
+    current = (
+        service_client().table("product_catalog").select("barcode")
+        .eq("id", item.product.id).maybe_single().execute()
+    )
+    if current and current.data and current.data.get("barcode"):
+        raise Conflict(
+            f"{item.product.name} already has the barcode {current.data['barcode']}."
+        )
+
+    # Service key: the catalog has no write policy at all (policies/catalog.sql), which is what
+    # keeps a client from renaming a product out from under every other shop.
+    service_client().table("product_catalog").update({"barcode": code}).eq(
+        "id", item.product.id
+    ).execute()
 def adjust(db, owner_id: str, actor_id: str, stock_item_id: str,
            change: int, reason: str) -> int:
     """

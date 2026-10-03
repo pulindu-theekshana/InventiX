@@ -14,6 +14,250 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 
 ---
 
+## 2026-10-03 - Reloading the till on any screen but the first
+**Fixed.** Pressing reload while on `/pos` showed the host's "Not Found": this is a single-page
+app, the static server answers unknown paths with a 404, and the service worker passed that
+through because a 404 is a successful HTTP response. A navigation that comes back not-ok now falls
+back to the stored app shell.
+
+## 2026-10-03 - Documentation split by audience
+**Added.** `docs/17-what-the-pos-changed.md` — every file that already existed and had to change
+for the till, and why. Written for someone reviewing the branch or picking the project up later.
+
+**Moved.** Every PDF into `docs/handouts/`. They are the documents that get sent to somebody, and
+several are printed copies of the markdown beside them, so listing both doubled the folder.
+Numbers are not reused or renumbered — file headers across `backend/` and `frontend/` point at
+these names.
+
+**Moved.** `docs/CLAUDE.md` → `CLAUDE.md` at the root of the repository. `docs/` is for people;
+the assistant's conventions and traps are a different kind of writing and were being read as if
+they were project documentation. The root is also where the tool looks for them by default.
+
+## 2026-10-03 - Pre-merge review of the POS branch
+**Fixed (security).** `profiles_update_own` pinned `role` but not `employer_id` or `is_active`,
+both of which migration 0029 made load-bearing. With their own token and no help from the app, a
+cashier could point `employer_id` at another shop — reading its stock, its bills and its till
+settings including the owner's PIN hash — or switch `is_active` back on after being removed. Both
+confirmed against the real project and then closed by `0031_a_profile_cannot_rewrite_its_own_rank.sql`.
+`backend/scripts/try_profile_escalation.py` is the check.
+
+**Fixed.** An unhandled 500 reached the browser without CORS headers, so it was reported as a CORS
+failure. `core/exceptions.py` now adds them, and a failed cashier creation says what Supabase
+refused instead of "something went wrong on our side".
+
+**Fixed.** A cashier who typed `/settings` was shown the supplier menu and told they held a
+supplier account.
+
+**Added.** Day close lists the bills the backend has refused, with what each cost, who rang it and
+why it was refused, and removes one in two taps. `queue.discard()` had existed with no screen
+behind it, so "1 rejected" could never be cleared — which matters when a cashier is removed while
+their till is offline. Refused bills are kept out of the drawer figure.
+
+**Removed.** `cart.park` / `cart.unpark` / `listParked`, written and never wired to a screen.
+
+**Decisions.** No new ones; this is the review that should have happened before the PR was drafted.
+
+## 2026-10-03 - Tests for the money the till counts
+**Changed.** `activity()` fetched the bills and worked out the answers in one function, so the
+grouping and the flagging could only be checked against a live database.
+`domain/pos.summarise_till()` now takes rows and limits and returns the totals; the service maps
+them to the response. Eleven tests cover what the service never could: two cashiers sharing a
+name, a zero discount at a zero limit, a refund over the limit, a price typed at the counter, the
+event cap, and numerics arriving from supabase-py as strings.
+
+**Added.** The frontend's first test runner — `jest-expo`, `npm test`. Fifteen tests over
+`src/pos/dayMath.ts`, which is the day close arithmetic split out of `day.ts`: a queued bill
+pricing itself, a card sale staying out of the cash drawer, the merge not mutating what it was
+given, cents surviving, and "today" being the device's day rather than UTC's.
+
+**Backend 164 tests, frontend 15.** Both run without a database.
+
+## 2026-10-03 - Phase 7: printing, scanning, and installing on the laptop
+**Added.** Till activity for the owner: `GET /customer/pos/activity` and **Reports -> Till — who
+sold what**. Takings per cashier over a day, a week or a month, and every discount and return with
+the name of the account that rang it. Owner only; no new SQL, it reads what phase 6 stamps.
+
+**Added.** A printed receipt (`src/pos/receipt.ts`), from the till's last bill and from any bill
+the returns screen finds. Markup and `window.print()` into a hidden iframe — a thermal roll
+printer on a laptop is an ordinary printer to the browser, so there is no driver and no
+dependency.
+
+**Added.** Installable till: `public/manifest.webmanifest`, `public/sw.js` and
+`public/index.html`. Opens from a desktop icon in its own window, and starts with no connection.
+`npm run build:web` and `npm run serve:web`.
+
+**Fixed.** An installed till with no connection showed the login screen to someone who was
+already signed in: the app asked the server who they were on every launch and read a failed
+request as a sign-out. The profile is remembered on the device and used when the server cannot be
+reached, and cleared on sign-out.
+
+**Added.** `src/pos/day.ts` — day close works offline. The day is built from what the backend has
+been sent (live, or the copy saved for today) plus the bills still in the queue, priced on the
+device, with the screen saying which half is which.
+
+**Added.** `src/pos/catalog.ts` — the till keeps the last product list it saw, so an offline
+counter can still find a product and build a bill. The screen says when the list is a stored one.
+
+**Added.** A "newer version is ready — reload now" bar instead of a worker that takes over
+mid-sale, and `src/components/UpdateReady.tsx` behind it.
+
+**Changed.** A character typed anywhere on the till now starts a search, so a scan after a tap on
+a stepper or a payment button is not lost.
+
+**Fixed.** A product with no price was added to a bill at LKR 0.00 and the sale could still be
+finished — free goods, with the stock dropping anyway. The till now asks the cashier for a price,
+marks the line, and the owner's till view lists that bill with "set a price in Stocks".
+Migration `0030_price_set_at_the_till.sql`.
+
+**Added.** Scan-to-link: an unknown barcode at the till offers to be saved to a product, which is
+how a shop whose catalog has no barcodes ever gets any. `POST /customer/stocks/{id}/barcode`,
+reachable by a cashier, written to the shared catalog and never overwritten.
+
+**Changed.** The Reports sales tab no longer says it is waiting for an uploaded POS file: sales
+from the shop's own till are already counted.
+
+**Not built.** Phase 8, the packaged `.exe`. `docs/16-pos-system.md` says what it would take and
+when it is worth it.
+
+**Decisions.** D-023, D-024.
+
+## 2026-10-02 - Phase 6: cashier accounts
+**Added.** Staff logins. The owner types a name and a password in till settings and gets back a
+login address for that person; they sign in at the normal screen and land on the till. New role
+`'cashier'` on `profiles` with `employer_id`, created through `POST /customer/pos/cashiers`.
+
+**Added.** `app_shop_id()` in the database and `CurrentUser.shop_id` in the backend - the same
+`coalesce(employer_id, id)`, so a policy and a service cannot disagree about whose shop a row
+belongs to. Read policies for the till on `stock_items`, `pos_sales`, `pos_sale_items` and
+`pos_settings`, added beside the owner's rather than replacing them.
+
+**Changed.** The name and id on a bill are stamped from the token. `pos_sales.cashier_id` is new,
+and the `cashier_label` the till sends is ignored - a field the client chooses is a field the
+client can lie about, and this is the one an owner would rely on in a dispute.
+
+**Changed.** The till's endpoints and `GET /customer/stocks` moved to `require_till` (owner or
+cashier). Everything else a shop can do stays on `require_customer`, so a cashier gets 403.
+
+**Changed.** The owner PIN is now asked for one thing only: a discount or refund above the shop's
+limit, while a cashier is at the counter. It no longer guards leaving the till or opening settings,
+because an account does that properly.
+
+**Removed.** `/pos/shift`, `src/pos/shift.ts` and the per-cashier PIN list. `pos_settings.cashiers`
+stays in the database, unread.
+
+**Migration.** `0029_cashier_accounts.sql` - run it before using the till.
+
+**Decisions.** D-022.
+
+## 2026-10-02 — Till: sales that could never be sent
+**Fixed.** A bill whose receipt number the shop had already used made the backend return 500, and
+the till kept it waiting for ever. It is now a 409 (`receipt_taken`); the till renumbers the bill
+and sends it again.
+
+**Added.** `GET /customer/pos/next-receipt` — the till moves its counter forward on opening, so a
+device whose storage was cleared does not restart at 1 and collide.
+
+**Added.** A request timeout (20s) in `api/client.ts`, a stuck-run guard in the send queue, and the
+reason and address shown on day close when something has not been sent.
+
+## 2026-10-02 — Till settings made readable, and three till bugs
+**Fixed.** Settings were read from an empty cache before the real ones arrived, so the shift screen
+said "no cashiers added yet" to a shop with three, and the settings screen opened unlocked for a
+shop that had set a PIN. `src/pos/settings.ts` now waits for the first load and tells open screens
+when fresh settings arrive.
+
+**Fixed.** `/pos` rendered for a signed-out browser. The till now requires a signed-in shop account
+and sends a supplier to their own home.
+
+**Changed.** Settings show what is saved — "A PIN is set", the two limits as amounts — each with a
+single Change button, instead of an empty field that read like nothing was saved. The limits say
+they apply to the whole shop. Cashiers can be added or removed at any time, and the shift screen
+always links to settings.
+
+**Added.** A Settings link on the till itself, behind the owner PIN.
+
+## 2026-10-01 — Phase 5 of the POS: who may use the till
+**Added.** `database/migrations/0028_pos_settings.sql` — one row per shop: the owner's PIN hash,
+the cashiers, and the limits above which the owner is asked.
+
+**Added.** `GET/PUT /customer/pos/settings`, `frontend/app/pos/shift.tsx`,
+`frontend/app/pos/settings.tsx`, `frontend/src/components/OwnerPin.tsx`,
+`frontend/src/pos/{pin,settings,shift}.ts`.
+
+**Changed.** The till now requires a shift before selling, stamps every bill with the cashier's
+name, asks the owner for a discount or refund above the limit and for leaving the till, and the day
+close has a "worth a look" list of discounts and returns per cashier.
+
+**Added.** Dependency `expo-crypto`, for hashing PINs on the device.
+
+**Decisions.** D-020.
+
+**Next.** Phase 6 — a real cashier account, where the data boundary is real.
+
+## 2026-10-01 — Phase 4 of the POS: returns and day close
+**Added.** `POST /customer/pos/returns` — prices taken from the original bill, a line cannot be
+returned twice, stock comes back through the audited path.
+
+**Added.** `frontend/app/pos/returns.tsx` and `frontend/app/pos/close.tsx`, both reachable from the
+sell screen.
+
+**Changed.** The day summary now splits takings per cashier, ready for phase 5 to put a real person
+behind the label.
+
+**Added.** `database/migrations/0027_sales_records_allow_returns.sql` — a return is stored as a
+negative row in the sales history, so Reports count net sales rather than gross.
+
+**Next.** Phase 5 — cashier PIN at shift start, owner PIN on discounts, returns and leaving the
+till.
+
+## 2026-10-01 — Phase 3 of the POS: the sell screen
+**Added.** `frontend/app/(pos)/` — the till: scan or search, cart with quantity steppers, discount,
+cash with change, three payment methods, finish. Reached from the menu as "Open the till".
+
+**Added.** `frontend/src/pos/cart.ts` — cart arithmetic and parked bills.
+
+**Changed.** `frontend/src/components/ui/Input.tsx` now accepts a ref, so the till can put the
+cursor back in the search box after every scan.
+
+**Next.** Phase 4 — returns and day close.
+
+## 2026-10-01 — Phase 2 of the POS: the till's outbox
+**Added.** `frontend/src/pos/queue.ts` — a bill is written to the device, then sent. Retries what
+could not be delivered, separates a refusal from a bad connection, and never drops a bill by itself.
+
+**Added.** `frontend/src/pos/device.ts` — this till's prefix and the receipt counter, so an offline
+till can still number its bills.
+
+**Added.** `frontend/src/api/pos.ts` and the till types in `frontend/src/types/api.ts`.
+
+**Added.** `frontend/src/hooks/usePosQueue.ts` — unsent and stuck counts for a screen, with a
+background retry while anything is waiting.
+
+**Decisions.** D-019.
+
+**Next.** Phase 3 — the sell screen.
+
+## 2026-10-01 — Phase 1 of the POS: database and backend
+**Added.** `database/migrations/0025_pos_adjustment_reasons.sql` — `pos_sale` and `return` join the
+closed list of reasons a quantity may change.
+
+**Added.** `database/migrations/0026_pos_sales.sql` — `pos_sales` and `pos_sale_items`, readable by
+their owner and writable only by the backend. `sales_records` now accepts a till sale as well as an
+uploaded one (`source`, `pos_sale_id`, and `upload_id` no longer mandatory), so Reports count both.
+
+**Added.** `backend/app/domain/pos.py` — receipt format, line and bill totals, how far stock may
+move, how much of a line is still returnable. Tested without a database in `tests/test_pos.py`.
+
+**Added.** `backend/app/feeds/customer/pos/` — record a sale, the day's bills, one bill by receipt
+number, and the day-close summary.
+
+**Added.** `docs/16-pos-system.md` — what the till is, where it sits, and the decisions behind it.
+
+**Decisions.** D-015 to D-018.
+
+**Next.** Phase 2 — the till's local storage and its sync queue, so a sale is saved on the device
+before it is sent.
+
 ## 2026-09-13 — Phase 2: Customer side connected to the backend
 **Added.** `frontend/src/hooks/useSubmit.ts` — one place that owns the busy flag and the error
 message for a write, because nine screens awaited a write with no `catch`. See D-011.

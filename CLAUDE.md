@@ -3,8 +3,13 @@
 Mobile inventory app for Sri Lankan grocery shops. Three parts: `frontend/` (React Native,
 Expo SDK 57, expo-router), `backend/` (FastAPI, Python), `database/` (Supabase Postgres).
 
-Read `docs/00-INDEX.md` first for the full documentation set. This file is the short version
-plus the traps already discovered, so they are not rediscovered one 500 at a time.
+**This file is written for an AI assistant working on the repository.** It lives at the root
+rather than in `docs/` because the two audiences were getting mixed up: `docs/` is written for
+people — teammates, a supervisor, whoever picks this up next — while this one is operating notes,
+conventions and traps.
+
+Read `docs/00-INDEX.md` first for the full documentation set. This file is the short version plus
+the traps already discovered, so they are not rediscovered one 500 at a time.
 
 ## Architecture rules that must not be broken
 
@@ -95,8 +100,19 @@ catch it: the 119 backend tests run without a database.
 
 **`stock_adjustments` has a read policy and no insert policy, on purpose** — the audit trail is only
 trustworthy if rows come from `apply_stock_adjustment()` and nowhere else. That function therefore
-must be `security definer` and must check ownership itself against `auth.uid()`. Without it, every
-quantity change fails: manual adjustments, sales uploads and delivery receipts alike.
+must be `security definer` and must check ownership itself — against `app_shop_id()` since migration
+0029, not `auth.uid()`, or a cashier's sale cannot move the shop's stock. Without the check at all,
+every quantity change fails: manual adjustments, sales uploads and delivery receipts alike.
+
+**The shop is `app_shop_id()`, not `auth.uid()`.** A cashier account (migration 0029) is a different
+user id working on its employer's rows. In the backend the same answer is `CurrentUser.shop_id`, and
+in the app it is `useAuth().shopId` — never `profile.id`, which for a cashier is the person, not the
+shop. Salting the owner's PIN hash with `profile.id` produces a hash the owner's PIN can never
+match.
+
+**A new role means every `role !== 'supplier'` check now also means "cashier".** `require_customer`
+refuses a cashier, which is the safe default; routes the till needs must name `require_till`
+explicitly.
 
 **Realtime needs the table added to the publication.** Subscriptions otherwise connect, report no
 error, and never fire. See `migrations/0019_realtime.sql`.
@@ -123,11 +139,44 @@ not match the `exp://<ip>:8081/--/` address, even entered exactly, so it fell ba
 Workaround for testing: set the Site URL itself to `exp://<laptop ip>:8081/--/` (changes with the
 network). For a real build set it to `inventix://`.
 
+**An unhandled 500 used to reach the browser as a CORS error.** A handler registered for
+`Exception` runs in Starlette's outermost middleware, outside `CORSMiddleware`, so its response
+carried no CORS headers and the browser blamed CORS — which sent a day's debugging in the wrong
+direction while three real sales sat unsent. `core/exceptions.py` now adds the headers itself
+(`_cors_headers`), echoing only an origin that is actually allowed. The lesson stands: a 500 that
+a browser cannot read is a 500 nobody can diagnose.
+
+**The web HTML template is `frontend/public/index.html`, not `app/+html.tsx`.** `+html.tsx` is
+only rendered by `output: static`, and static pre-renders in Node where `window is not defined`
+crashes the build — which is why `app.json` says `output: single`. Expo copies `public/` to the
+root of the export and injects the bundle's script tag into that template. The script tag is
+injected at the *end* of the body, so anything inline that looks for it must wait for `load`.
+
+**The service worker is registered only for a built export.** In development Metro serves a fresh
+bundle on every save; a worker caching that is a morning spent asking why a change will not show.
+The guard is the bundle path: an export loads `/_expo/static/js/web/entry-<hash>.js`, the dev
+server loads `/index.bundle?platform=web`. A browser also refuses a worker outside https or
+localhost, so the LAN address has no offline shell by design.
+
+**A service worker that does not change is never updated.** A browser compares the bytes of
+`sw.js`; identical bytes mean no update event, so the "new version ready" bar never appears and a
+till keeps serving the build it cached. `npm run build:web` therefore stamps `dist/sw.js` through
+`scripts/stamp-sw.mjs` — `public/sw.js` keeps the `__BUILD__` placeholder so git is not dirtied by
+every build. Never export the web build without that step.
+
+**`npx expo serve` does not fall back to index.html.** `/pos` is a 404 there, which is why the
+manifest starts the app at `/`. Any real static host for this build needs the fallback configured.
+
 **Upload rows live in memory between steps** (`_pending` in `uploads/service.py`). Editing a backend
 file restarts uvicorn and loses them, so do not edit the backend while someone is mid-upload.
 
 ## Conventions
 
+- **Rules go in `domain/` and `src/pos/*Math.ts`, fetching stays in `service.py` and the hooks.**
+  A function that reads the database and decides something can only be checked against a live
+  database, which in practice means it is not checked. `summarise_till` and `dayMath` were split
+  out for exactly that reason. Run `pytest` in `backend/` and `npm test` in `frontend/`; neither
+  needs a database, and anything that would is a script in `backend/scripts/`.
 - **A migration is never edited after it has run.** Write the next numbered file. `database/functions/`
   and `database/policies/` are `create or replace` definitions and *are* edited in place.
 - **Writes from a screen go through `hooks/useSubmit.ts`.** It keeps the busy flag and the error
@@ -137,6 +186,12 @@ file restarts uvicorn and loses them, so do not edit the backend while someone i
   `database/seeds/demo_data.sql` — real ones only fit one Supabase project.
 - Prefer fixing the root cause in `service.py` over correcting a number in the app. The app shows
   what the backend sends.
+
+## The POS (being built)
+
+`frontend/app/(pos)/` will be the till; phase 1 (database and backend) is done. A sale is an
+endpoint on this same backend — there is no separate POS API. See `docs/16-pos-system.md` for the
+phases and the decisions. Migrations 0025 and 0026 must be run before any sale can be recorded.
 
 ## Known gaps (not bugs to "fix" silently — they are unbuilt)
 
@@ -154,5 +209,5 @@ file restarts uvicorn and loses them, so do not edit the backend while someone i
 
 Customer side integrated and tested against the real backend: auth, catalog, stocks, suppliers,
 ordering, delivery, uploads. Supplier side (listings, orders, supplier delivery) is not yet tested.
-`docs/11-integration-plan.pdf` has the full plan; `docs/05-changelog.md` and `docs/10-connections.md`
+`docs/handouts/11-integration-plan.pdf` has the full plan; `docs/05-changelog.md` and `docs/10-connections.md`
 still describe the pre-integration state and need updating.

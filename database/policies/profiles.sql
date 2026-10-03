@@ -32,12 +32,20 @@ create policy profiles_read_suppliers on profiles
 -- using decides which row you may touch; with check decides what it may look
 -- like afterwards. Both are needed: using stops you editing someone else's row,
 -- with check stops you changing your own role.
+-- Every column that decides what this account may reach is pinned here: role (which graph it
+-- loads), employer_id (whose shop its policies read, migration 0029) and is_active (whether it may
+-- sign in at all). Migration 0031 added the last two after a review found that a cashier could
+-- move themselves to another shop, or undo their own removal, with their own token.
 create policy profiles_update_own on profiles
   for update
   using (id = auth.uid())
   with check (
     id = auth.uid()
     and role = (select p.role from profiles p where p.id = auth.uid())
+    and employer_id is not distinct from
+        (select p.employer_id from profiles p where p.id = auth.uid())
+    and is_active is not distinct from
+        (select p.is_active from profiles p where p.id = auth.uid())
   );
 
 -- There is deliberately NO insert policy, and that absence is load-bearing.
@@ -47,3 +55,16 @@ create policy profiles_update_own on profiles
 -- becomes decorative.
 --
 -- There is also no delete policy. Deleting the auth user cascades to the profile.
+
+-- ---------------------------------------------------------------------------
+-- Migration 0029: cashier accounts.
+--
+-- coalesce(employer_id, id): an owner is their own shop, a cashier works for one. Every policy
+-- that used to ask "is this row yours" now asks "is this row your shop's", in one place.
+create or replace function app_shop_id() returns uuid
+language sql stable security definer set search_path = public
+as $$ select coalesce(employer_id, id) from profiles where id = auth.uid() $$;
+
+-- So the till can show the shop's name while a cashier is signed in.
+create policy profiles_read_employer on profiles
+  for select using (id = app_shop_id());

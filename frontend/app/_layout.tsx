@@ -11,6 +11,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { UpdateReady } from '../src/components/UpdateReady';
 import { useAuth } from '../src/hooks/useAuth';
 import { initialise } from '../src/stores/authStore';
 import { colors } from '../src/theme/colors';
@@ -42,6 +43,8 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
+      {/* Nothing on native, and nothing on the web until a new build is waiting. */}
+      <UpdateReady />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.primary },
@@ -56,6 +59,8 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(customer)" options={{ headerShown: false, title: 'Home' }} />
         <Stack.Screen name="(supplier)" options={{ headerShown: false, title: 'Home' }} />
+        {/* The till. Its own group: a cashier sees no tabs, no notifications, no menu. */}
+        <Stack.Screen name="pos" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
         <Stack.Screen name="settings/index" options={{ title: 'Menu' }} />
         <Stack.Screen name="settings/profile" options={{ title: 'My profile' }} />
