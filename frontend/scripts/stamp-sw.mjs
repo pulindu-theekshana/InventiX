@@ -12,19 +12,20 @@
  */
 import fs from 'node:fs';
 
-const file = 'dist/sw.js';
 const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
 
-if (!fs.existsSync(file)) {
-  console.error('stamp-sw: no dist/sw.js — run the export first');
-  process.exit(1);
+/** The worker's cache name, and the marker the app shows in till settings. */
+for (const file of ['dist/sw.js', 'dist/index.html']) {
+  if (!fs.existsSync(file)) {
+    console.error(`stamp-sw: no ${file} — run the export first`);
+    process.exit(1);
+  }
+  const source = fs.readFileSync(file, 'utf8');
+  if (!source.includes('__BUILD__')) {
+    console.error(`stamp-sw: ${file} has no __BUILD__ placeholder`);
+    process.exit(1);
+  }
+  fs.writeFileSync(file, source.replaceAll('__BUILD__', stamp));
 }
 
-const source = fs.readFileSync(file, 'utf8');
-if (!source.includes('__BUILD__')) {
-  console.error('stamp-sw: dist/sw.js has no __BUILD__ placeholder');
-  process.exit(1);
-}
-
-fs.writeFileSync(file, source.replace('__BUILD__', stamp));
-console.log(`stamp-sw: cache is inventix-till-${stamp}`);
+console.log(`stamp-sw: build ${stamp}`);

@@ -17,6 +17,7 @@ import { colors } from '../../src/theme/colors';
 import { radius, spacing } from '../../src/theme/spacing';
 import { text } from '../../src/theme/typography';
 import { currency } from '../../src/lib/format';
+import { buildStamp } from '../../src/lib/build';
 import { useAuth } from '../../src/hooks/useAuth';
 import { useSubmit } from '../../src/hooks/useSubmit';
 import { createCashier, listCashiers, removeCashier } from '../../src/api/pos';
@@ -387,7 +388,7 @@ export default function TillSettings() {
         fullWidth
       />
       <Text style={[text.caption, styles.muted]}>
-        Signed in as {profile?.contact_person ?? 'the owner'}.
+        Signed in as {profile?.contact_person ?? 'the owner'}. Till build {buildStamp()}.
       </Text>
     </ScrollView>
   );
