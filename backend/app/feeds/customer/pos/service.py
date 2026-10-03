@@ -450,10 +450,9 @@ def next_receipt(db, owner_id: str, device_id: str) -> str:
 # Day close answers "does the drawer match" for one till on one day. This answers a different
 # question -- "who did what, and is any of it odd" -- from the owner's own phone, over a range.
 
-# One query, grouped in Python, as day_summary does. A month of a small shop's bills is hundreds
-# of rows, and PostgREST cannot group without a view. The cap is what keeps that true.
+# One query, grouped in memory, as day_summary does: PostgREST cannot group without a view, and a
+# month of a small shop's bills is hundreds of rows. domain/pos.MAX_EVENTS caps the list itself.
 MAX_DAYS = 31
-MAX_EVENTS = 200
 
 
 def activity(db, owner_id: str, start: date | None, end: date | None) -> TillActivityOut:
@@ -483,67 +482,42 @@ def activity(db, owner_id: str, start: date | None, end: date | None) -> TillAct
 
     limits = get_settings(db, owner_id)
 
-    people: dict[tuple[str | None, str | None], TillCashierOut] = {}
-    events: list[TillEventOut] = []
-    sales = returns = discounts = 0.0
-    bills = 0
-
-    for row in rows:
-        total = float(row["total"])
-        discount = float(row["discount"])
-        key = (row.get("cashier_id"), row.get("cashier_label"))
-        person = people.setdefault(
-            key, TillCashierOut(cashier_id=key[0], cashier=key[1])
-        )
-
-        if row["kind"] == "sale":
-            bills += 1
-            sales += total
-            discounts += discount
-            person.bills += 1
-            person.sales_total += total
-            person.discounts_total += discount
-            over = discount > 0 and discount > limits.discount_limit
-        else:
-            returns += total
-            person.returns_total += total
-            over = total > limits.return_limit
-
-        # A price typed at the counter belongs beside the discounts: it is the other way a bill
-        # can be worth less than it should be, and the shop fixes it by setting a price in Stocks.
-        priced_at_till = any(
-            item.get("price_from_till") for item in (row.get("pos_sale_items") or [])
-        )
-
-        # Every discount and every return. A return of nothing unusual still belongs here: it is
-        # the other way money leaves the drawer, and the owner is the one who decides what is odd.
-        if (row["kind"] == "return" or discount > 0 or priced_at_till) and len(events) < MAX_EVENTS:
-            events.append(TillEventOut(
-                receipt_no=row["receipt_no"],
-                kind=row["kind"],
-                sold_at=row["sold_at"],
-                cashier=row.get("cashier_label"),
-                cashier_id=row.get("cashier_id"),
-                total=round(total, 2),
-                discount=round(discount, 2),
-                above_limit=over,
-                priced_at_till=priced_at_till,
-            ))
-
-    for person in people.values():
-        person.sales_total = round(person.sales_total, 2)
-        person.discounts_total = round(person.discounts_total, 2)
-        person.returns_total = round(person.returns_total, 2)
+    # Rules in domain/pos.py, fetching here. The grouping and the flagging are what an owner reads
+    # when judging their staff, so they are tested without a database (tests/test_pos.py).
+    totals = rules.summarise_till(rows, limits.discount_limit, limits.return_limit)
 
     return TillActivityOut(
         from_date=start.isoformat(),
         to_date=end.isoformat(),
-        bills=bills,
-        sales_total=round(sales, 2),
-        returns_total=round(returns, 2),
-        discounts_total=round(discounts, 2),
-        by_cashier=sorted(people.values(), key=lambda c: -c.sales_total),
-        events=events,
+        bills=totals.bills,
+        sales_total=float(totals.sales_total),
+        returns_total=float(totals.returns_total),
+        discounts_total=float(totals.discounts_total),
+        by_cashier=[
+            TillCashierOut(
+                cashier_id=c.cashier_id,
+                cashier=c.cashier,
+                bills=c.bills,
+                sales_total=float(c.sales_total),
+                discounts_total=float(c.discounts_total),
+                returns_total=float(c.returns_total),
+            )
+            for c in totals.by_cashier
+        ],
+        events=[
+            TillEventOut(
+                receipt_no=e.receipt_no,
+                kind=e.kind,
+                sold_at=e.sold_at,
+                cashier=e.cashier,
+                cashier_id=e.cashier_id,
+                total=float(e.total),
+                discount=float(e.discount),
+                above_limit=e.above_limit,
+                priced_at_till=e.priced_at_till,
+            )
+            for e in totals.events
+        ],
     )
 # ---------------------------------------------------------------------------
 # Cashier accounts

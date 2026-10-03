@@ -99,3 +99,91 @@ class TestSaleRequest:
         SaleIn(**{**SALE, "lines": [{"catalog_product_id": "p1", "quantity": 1, "unit_price": 0}]})
         with pytest.raises(ValidationError):
             SaleIn(**{**SALE, "lines": [{"catalog_product_id": "p1", "quantity": 0, "unit_price": 10}]})
+
+
+class TestTillSummary:
+    """
+    What the owner reads about their staff. The flagging decides whether a person is asked about
+    a bill, so each rule gets a case of its own rather than one happy-path assertion.
+    """
+
+    @staticmethod
+    def bill(**overrides):
+        row = {
+            "receipt_no": "T1-000001",
+            "kind": "sale",
+            "sold_at": "2026-10-03T09:00:00Z",
+            "total": 1000,
+            "discount": 0,
+            "cashier_id": "nimal-id",
+            "cashier_label": "Nimal",
+            "pos_sale_items": [],
+        }
+        row.update(overrides)
+        return row
+
+    def test_takings_add_up_per_person(self):
+        result = pos.summarise_till([
+            self.bill(total=1000),
+            self.bill(total=500),
+            self.bill(total=250, cashier_id="kamal-id", cashier_label="Kamal"),
+        ])
+        assert result.bills == 3
+        assert result.sales_total == Decimal("1750.00")
+        # Sorted by what each person took, because that is the column an owner scans first.
+        assert [(c.cashier, c.bills, c.sales_total) for c in result.by_cashier] == [
+            ("Nimal", 2, Decimal("1500.00")),
+            ("Kamal", 1, Decimal("250.00")),
+        ]
+
+    def test_two_people_with_one_name_are_not_one_person(self):
+        """The id is what identifies a cashier; the label is only what gets printed."""
+        result = pos.summarise_till([
+            self.bill(cashier_id="a", cashier_label="Nimal"),
+            self.bill(cashier_id="b", cashier_label="Nimal"),
+        ])
+        assert len(result.by_cashier) == 2
+
+    def test_a_discount_over_the_limit_is_flagged(self):
+        result = pos.summarise_till([self.bill(discount=200)], discount_limit=100)
+        assert [e.above_limit for e in result.events] == [True]
+
+    def test_a_discount_under_the_limit_is_listed_but_not_flagged(self):
+        result = pos.summarise_till([self.bill(discount=50)], discount_limit=100)
+        assert [(e.discount, e.above_limit) for e in result.events] == [(Decimal("50.00"), False)]
+
+    def test_a_bill_with_no_discount_is_not_an_event(self):
+        assert pos.summarise_till([self.bill()]).events == []
+
+    def test_a_return_is_always_an_event_and_never_a_sale(self):
+        result = pos.summarise_till([self.bill(kind="return", total=300)], return_limit=500)
+        assert result.bills == 0
+        assert result.sales_total == Decimal("0.00")
+        assert result.returns_total == Decimal("300.00")
+        assert [(e.kind, e.above_limit) for e in result.events] == [("return", False)]
+
+    def test_a_refund_over_the_limit_is_flagged(self):
+        result = pos.summarise_till([self.bill(kind="return", total=900)], return_limit=500)
+        assert [e.above_limit for e in result.events] == [True]
+
+    def test_a_price_typed_at_the_till_is_listed_without_a_discount(self):
+        result = pos.summarise_till([
+            self.bill(pos_sale_items=[{"price_from_till": True}, {"price_from_till": False}]),
+        ])
+        assert [(e.priced_at_till, e.discount) for e in result.events] == [(True, Decimal("0.00"))]
+
+    def test_a_zero_discount_is_not_a_discount_even_at_a_zero_limit(self):
+        """`discount_limit = 0` means "ask me about every discount", not "flag every bill"."""
+        assert pos.summarise_till([self.bill(discount=0)], discount_limit=0).events == []
+
+    def test_the_event_list_is_capped(self):
+        rows = [self.bill(discount=10) for _ in range(5)]
+        result = pos.summarise_till(rows, max_events=2)
+        assert len(result.events) == 2
+        # The totals still count every bill: only the list the owner reads is shortened.
+        assert result.bills == 5
+
+    def test_money_arrives_as_strings_without_losing_cents(self):
+        """supabase-py hands numerics back as strings, which is how 0.1 + 0.2 gets interesting."""
+        result = pos.summarise_till([self.bill(total="0.10"), self.bill(total="0.20")])
+        assert result.sales_total == Decimal("0.30")
