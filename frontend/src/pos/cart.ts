@@ -65,7 +65,8 @@ export function money(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-export function lineTotal(line: CartLine): number {
+/** Takes anything priced: a cart line, or a line read back off a queued bill (pos/day.ts). */
+export function lineTotal(line: { quantity: number; unit_price: number }): number {
   return money(line.quantity * line.unit_price);
 }
 
@@ -73,7 +74,7 @@ export function lineTotal(line: CartLine): number {
  * What the customer pays. The backend computes this again from the same lines and stores its own
  * answer -- this one is for the screen, so the cashier sees the total before the network does.
  */
-export function cartTotal(lines: CartLine[], discount = 0): number {
+export function cartTotal(lines: { quantity: number; unit_price: number }[], discount = 0): number {
   const gross = lines.reduce((sum, l) => sum + lineTotal(l), 0);
   return money(Math.max(gross - discount, 0));
 }

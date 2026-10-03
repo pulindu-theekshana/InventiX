@@ -11,7 +11,6 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../src/components/ui/Button';
-import { ErrorBanner } from '../../src/components/ErrorBanner';
 import { colors } from '../../src/theme/colors';
 import { radius, spacing } from '../../src/theme/spacing';
 import { text } from '../../src/theme/typography';
@@ -21,32 +20,30 @@ import { useAuth } from '../../src/hooks/useAuth';
 import { ConfirmSignOut } from '../../src/components/ConfirmSignOut';
 import { isOffline } from '../../src/lib/network';
 import { signOut } from '../../src/stores/authStore';
-import { daySummary, listSales } from '../../src/api/pos';
+import { readDay, type TillDay } from '../../src/pos/day';
 import { API_BASE_URL } from '../../src/api/client';
-import type { DaySummary, Sale } from '../../src/types/api';
+import type { Sale } from '../../src/types/api';
 
 export default function Close() {
   const outbox = usePosQueue();
   const { isCashier } = useAuth();
   const [leaving, setLeaving] = useState(false);
-  const [summary, setSummary] = useState<DaySummary | null>(null);
-  const [bills, setBills] = useState<Sale[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [day, setDay] = useState<TillDay | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /**
+   * Never throws and never shows an error: a till with no line still has to count its drawer, so
+   * readDay() falls back to the last copy plus whatever has been rung since. What it cannot know,
+   * it says on screen instead.
+   */
   const load = useCallback(async () => {
     setBusy(true);
-    setError(null);
-    try {
-      const [s, b] = await Promise.all([daySummary(), listSales()]);
-      setSummary(s);
-      setBills(b);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not read today from the backend.');
-    } finally {
-      setBusy(false);
-    }
+    setDay(await readDay());
+    setBusy(false);
   }, []);
+
+  const summary = day?.summary ?? null;
+  const bills = day?.bills ?? [];
 
   useFocusEffect(
     useCallback(() => {
@@ -59,19 +56,31 @@ export default function Close() {
       contentContainerStyle={styles.scroll}
       refreshControl={<RefreshControl refreshing={busy} onRefresh={load} />}
     >
-      <ErrorBanner message={error} />
-
       {/*
-        Unsent bills come first. A drawer counted while sales are still queued will not match
-        the figure below, and the cashier should know that before they start counting.
+        The drawer is counted against both halves: what the backend has been sent, and what is
+        still on this till. Saying which is which is the difference between a figure a cashier
+        can trust and one they quietly stop believing.
       */}
-      {outbox.waiting > 0 || outbox.stuck > 0 ? (
+      {day && day.source !== 'server' ? (
         <View style={styles.warn}>
           <Ionicons name="cloud-offline-outline" size={18} color={colors.warning} />
           <Text style={[text.label, styles.flex]}>
+            {day.source === 'saved'
+              ? `No connection. Sent bills are as this till last saw them${
+                  day.serverAt ? ` at ${new Date(day.serverAt).toLocaleTimeString()}` : ''
+                }, plus everything rung since.`
+              : 'No connection, and nothing read from the backend today. These are the bills rung on this till.'}
+          </Text>
+        </View>
+      ) : null}
+
+      {outbox.waiting > 0 || outbox.stuck > 0 ? (
+        <View style={styles.warn}>
+          <Ionicons name="cloud-upload-outline" size={18} color={colors.warning} />
+          <Text style={[text.label, styles.flex]}>
             {outbox.waiting > 0 ? `${outbox.waiting} bill(s) not sent yet. ` : ''}
             {outbox.stuck > 0 ? `${outbox.stuck} rejected. ` : ''}
-            Today&apos;s figures are missing them.
+            They are counted below and go when the connection is back.
             {outbox.error ? ` (${outbox.error} — sending to ${API_BASE_URL})` : ''}
           </Text>
           <Button label="Try now" variant="outline" onPress={() => outbox.syncNow().then(load)} />
@@ -131,11 +140,15 @@ export default function Close() {
         <Text style={[text.label, styles.muted]}>Nothing sold yet today.</Text>
       ) : (
         bills.map((bill) => (
-          /** A sale opens the return screen already loaded; a return has nothing to return. */
+          /**
+           * A sale opens the return screen already loaded; a return has nothing to return, and
+           * neither has a bill still sitting in the queue -- the backend has never seen it, so it
+           * cannot price a return against it.
+           */
           <Pressable
             key={bill.id}
             onPress={
-              bill.kind === 'sale'
+              bill.kind === 'sale' && !bill.id.startsWith('queued-')
                 ? () => router.push(`/pos/returns?receipt=${encodeURIComponent(bill.receipt_no)}`)
                 : undefined
             }
@@ -149,6 +162,7 @@ export default function Close() {
               <Text style={[text.caption, styles.muted]}>
                 {new Date(bill.sold_at).toLocaleTimeString()} · {bill.lines.length} item(s) ·{' '}
                 {bill.payment_method}
+                {bill.id.startsWith('queued-') ? ' · not sent yet' : ''}
               </Text>
             </View>
             <Text
@@ -160,7 +174,7 @@ export default function Close() {
               {bill.kind === 'return' ? '-' : ''}
               {currency(bill.total)}
             </Text>
-            {bill.kind === 'sale' ? (
+            {bill.kind === 'sale' && !bill.id.startsWith('queued-') ? (
               <Ionicons name="chevron-forward" size={16} color={colors.textSubtle} />
             ) : null}
           </Pressable>

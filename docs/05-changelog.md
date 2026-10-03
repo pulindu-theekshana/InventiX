@@ -33,6 +33,10 @@ already signed in: the app asked the server who they were on every launch and re
 request as a sign-out. The profile is remembered on the device and used when the server cannot be
 reached, and cleared on sign-out.
 
+**Added.** `src/pos/day.ts` — day close works offline. The day is built from what the backend has
+been sent (live, or the copy saved for today) plus the bills still in the queue, priced on the
+device, with the screen saying which half is which.
+
 **Added.** `src/pos/catalog.ts` — the till keeps the last product list it saw, so an offline
 counter can still find a product and build a bill. The screen says when the list is a stored one.
 

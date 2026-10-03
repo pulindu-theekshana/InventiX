@@ -557,6 +557,14 @@ So an offline till can now open, find a product, take cash and queue the bill. W
 do: sign someone in for the first time, look up an old receipt for a return, or learn a new
 barcode. All three need the server, and all three say so rather than failing quietly.
 
+**Counting the drawer.** Day close read the day from the backend, so an offline till showed
+nothing at the one moment a cashier has to count. `src/pos/day.ts` now builds the day from both
+halves: what the backend has been sent (read live, or the last copy saved for today) plus every
+bill still in the queue, priced on the device. The screen says which half is which -- "sent bills
+are as this till last saw them at 6.42pm, plus everything rung since" -- because a figure a
+cashier cannot place is one they stop believing. A queued bill is listed with "not sent yet" and
+cannot be tapped for a return: the backend has never seen it, so it cannot price one.
+
 **And signing out is the trap.** Only the server can sign anyone back in, so a cashier who ends
 their shift on a dead line leaves the counter with a login screen nobody can answer. Sign out at
 the till now asks first -- naming the lack of connection, and saying that unsent bills are kept
