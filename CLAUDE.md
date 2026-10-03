@@ -209,5 +209,5 @@ phases and the decisions. Migrations 0025 and 0026 must be run before any sale c
 
 Customer side integrated and tested against the real backend: auth, catalog, stocks, suppliers,
 ordering, delivery, uploads. Supplier side (listings, orders, supplier delivery) is not yet tested.
-`docs/11-integration-plan.pdf` has the full plan; `docs/05-changelog.md` and `docs/10-connections.md`
+`docs/handouts/11-integration-plan.pdf` has the full plan; `docs/05-changelog.md` and `docs/10-connections.md`
 still describe the pre-integration state and need updating.

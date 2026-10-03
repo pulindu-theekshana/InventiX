@@ -18,6 +18,11 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 **Added.** `docs/17-what-the-pos-changed.md` — every file that already existed and had to change
 for the till, and why. Written for someone reviewing the branch or picking the project up later.
 
+**Moved.** Every PDF into `docs/handouts/`. They are the documents that get sent to somebody, and
+several are printed copies of the markdown beside them, so listing both doubled the folder.
+Numbers are not reused or renumbered — file headers across `backend/` and `frontend/` point at
+these names.
+
 **Moved.** `docs/CLAUDE.md` → `CLAUDE.md` at the root of the repository. `docs/` is for people;
 the assistant's conventions and traps are a different kind of writing and were being read as if
 they were project documentation. The root is also where the tool looks for them by default.
