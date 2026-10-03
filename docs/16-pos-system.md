@@ -588,10 +588,11 @@ the usual advice.
 
 ### What is still only half true
 - A cashier's first sign-in on a laptop needs a connection; after that the till opens offline.
-- A static host must send unknown paths to `index.html`, or a reload on `/pos` is a 404. The
-  manifest therefore starts the app at `/`, which routes by role anyway.
-- `npx expo serve` does not do that fallback, so use it for the install test, not as the shop's
-  long-term server.
+- A static host that does not send unknown paths to `index.html` answers `/pos` with a 404, which
+  is what `npx expo serve` does. The service worker now covers it — a navigation that comes back
+  not-ok falls back to the stored app shell, so a reload on any till screen still opens the app —
+  but a *first* visit to a deep link in a browser that has no worker yet still 404s. The manifest
+  therefore starts the app at `/`, which routes by role anyway.
 - The service worker was syntax-checked and the export was served and opened, but **registration
   itself is untested**: the browser this was built in refuses to register one. The install icon
   appearing in Chrome is the proof, and that is the first thing to try.

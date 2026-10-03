@@ -14,6 +14,12 @@ Decisions. D-00N (link to the decision log entry if this came from a decision)
 
 ---
 
+## 2026-10-03 - Reloading the till on any screen but the first
+**Fixed.** Pressing reload while on `/pos` showed the host's "Not Found": this is a single-page
+app, the static server answers unknown paths with a 404, and the service worker passed that
+through because a 404 is a successful HTTP response. A navigation that comes back not-ok now falls
+back to the stored app shell.
+
 ## 2026-10-03 - Documentation split by audience
 **Added.** `docs/17-what-the-pos-changed.md` — every file that already existed and had to change
 for the till, and why. Written for someone reviewing the branch or picking the project up later.

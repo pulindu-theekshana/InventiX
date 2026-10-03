@@ -56,12 +56,23 @@ self.addEventListener('fetch', (event) => {
   // than an error the screen can show, and the send queue already handles being offline.
   if (url.origin !== self.location.origin) return;
 
-  // Navigations: try the network so a deploy is picked up, fall back to whatever is stored so
-  // the shop can still open the till on a dead line.
+  /*
+   * Navigations: try the network so a deploy is picked up, and fall back to the stored page
+   * otherwise.
+   *
+   * "Otherwise" means two different things, and only one of them is being offline. This is a
+   * single-page app: every route after the first is drawn by the bundle, so a host that does not
+   * send unknown paths to index.html answers /pos with a 404 -- and reloading the till on any
+   * screen but the first showed the host's "Not Found" instead of the app. A 404 is a perfectly
+   * successful HTTP response, so it has to be checked for by hand.
+   */
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((response) => {
+          if (!response.ok) {
+            return caches.match('/').then((hit) => hit || response);
+          }
           const copy = response.clone();
           caches.open(VERSION).then((cache) => cache.put('/', copy));
           return response;
