@@ -14,10 +14,11 @@
 | `10-connections.md` | How the app, the backend and the database actually talk to each other: the three edges, the two keys, and a traced request through all of them. | You change how a layer reaches another, or move a read between the direct and backend paths. |
 | `16-pos-system.md` | The till: what it is, how it reaches the same backend the app uses, and the decisions behind each phase. | You build another phase of the POS, or change how a sale is recorded. |
 | `17-what-the-pos-changed.md` | Every file that already existed and had to change for the till, and why. Written for a reviewer. | You change something outside `pos/` for the till's sake. |
+| `future/` | Briefings for work that is designed but not built, one file per piece of work. See `future/README.md`. | You design something you are not building yet, or you build part of it. |
 
 ## How this folder is arranged
 
-Markdown here, PDFs in `handouts/`. The PDFs are the ones that get sent to somebody — a supervisor,
+Markdown here, PDFs in `handouts/`, and anything designed but not yet built in `future/`. The PDFs are the ones that get sent to somebody — a supervisor,
 a teammate setting the project up, a supplier — and several are a printed copy of the markdown
 beside them (`08`, `09`, `10`). Keeping them in one list made the folder look twice as long as it
 is.
@@ -33,6 +34,7 @@ and `frontend/` point at these names, and a tidy-looking sequence is not worth b
 | `handouts/12-supplier-handover.pdf` | For the teammate who took the supplier feed |
 | `handouts/15-network-change.pdf` | How to point the app at a new laptop address |
 | `handouts/backend-build-report.pdf`, `database-build-report.pdf`, `frontend-build-record.pdf` | What was built in each part, for the project report |
+| `handouts/future-machine-learning.pdf` | Printed copy of `future/machine-learning.md`, for the project report |
 
 ## Who each document is for
 
